@@ -390,7 +390,10 @@ async def get_devices(token):
                             "name": device["name"],
                             "imei": device["imei"],
                             "model": device["device_models"][0]["model"],
-                            "has_battery": device["device_models"][0]["standalone_battery"] == 1
+                            # "has_battery": device["device_models"][0]["standalone_battery"] == 1
+                            # Temporary workaround for devices like Vehicle Finder 4G 2.0 v2 showing no battery
+                            # Intended to be used only on "forced-battery" branch
+                            "has_battery": True
                         }
                     return results
                 else:
