@@ -1,14 +1,17 @@
 {
   "config": {
     "error": {
+      "entry_name_required": "Please enter a name for the entry.",
       "email_required": "Please enter your e-mail address.",
       "password_required": "Please enter your password."
     },
     "step": {
       "user": {
         "data": {
+          "entry_name": "Entry name to identify the account in HA",
           "email": "E-Mail",
-          "password": "Password"
+          "password": "Password",
+          "mark_alerts_as_read": "Mark alerts as read"
         },
         "description": "Add credentials for PAJ GPS Tracker (finder-portal.com).",
         "title": "Authorization"
@@ -17,14 +20,17 @@
   },
   "options": {
     "error": {
+      "entry_name_required": "Please enter a name for the entry.",
       "email_required": "Please enter your e-mail address.",
       "password_required": "Please enter your password."
     },
     "step": {
       "user": {
         "data": {
+          "entry_name": "Entry name to identify the account in HA",
           "email": "E-Mail",
-          "password": "Password"
+          "password": "Password",
+          "mark_alerts_as_read": "Mark alerts as read"
         },
         "description": "Add credentials for PAJ GPS Tracker (finder-portal.com).",
         "title": "Authorization"

@@ -1,4 +1,3 @@
-"""IP Custom Component."""
 import asyncio
 import logging
 
@@ -27,9 +26,7 @@ async def async_setup_entry(
     hass.data[DOMAIN][entry.entry_id] = hass_data
 
     # Forward the setup to the device_tracker platform
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setups(entry, ["device_tracker"])
-    )
+    await hass.config_entries.async_forward_entry_setups(entry, ["device_tracker", "sensor", "binary_sensor"])
 
     return True
 

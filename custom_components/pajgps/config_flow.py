@@ -11,12 +11,16 @@ from homeassistant.core import callback
 from .const import DOMAIN
 
 big_int = vol.All(vol.Coerce(int), vol.Range(min=300))
+# Email validator that checks if the string is not empty and contains '@'
+email_validator = vol.All(cv.string, vol.Length(min=1), vol.Match(r"^[^@]+@[^@]+\.[^@]+$"))
 
 _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = vol.Schema(
             {
-                vol.Required('email', default=''): cv.string,
+                vol.Required('entry_name', default='My Paj GPS Account'): cv.string,
+                vol.Required('email', default=''): email_validator,
                 vol.Required('password', default=''): cv.string,
+                vol.Required('mark_alerts_as_read', default=True): cv.boolean,
             }
         )
 
@@ -27,6 +31,9 @@ class CustomFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: Dict[str, str] = {}
         if user_input is not None:
             self.data = user_input
+            # If entry_name is null or empty string, add error
+            if not self.data['entry_name'] or self.data['entry_name'] == '':
+                errors['base'] = 'entry_name_required'
             # If email is null or empty string, add error
             if not self.data['email'] or self.data['email'] == '':
                 errors['base'] = 'email_required'
@@ -34,7 +41,7 @@ class CustomFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not self.data['password'] or self.data['password'] == '':
                 errors['base'] = 'password_required'
             if not errors:
-                return self.async_create_entry(title="PAJ GPS Tracker", data=self.data)
+                return self.async_create_entry(title=f"{self.data['entry_name']}", data=self.data)
 
         return self.async_show_form(step_id="user", data_schema=CONFIG_SCHEMA, errors=errors)
 
@@ -64,8 +71,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if not self.data['password'] or self.data['password'] == '':
                 errors['base'] = 'password_required'
             if not errors:
-                return self.async_create_entry(title="PAJ GPS Tracker", data={'email': user_input['email'], 'password': user_input['password']})
+                return self.async_create_entry(title=f"{self.data['entry_name']}", data={'entry_name': user_input['entry_name'], 'email': user_input['email'], 'password': user_input['password'], 'mark_alerts_as_read': user_input['mark_alerts_as_read']})
 
+        default_entry_name = ''
+        if 'entry_name' in self.config_entry.data:
+            default_entry_name = self.config_entry.data['entry_name']
         default_email = ''
         if 'email' in self.config_entry.data:
             default_email = self.config_entry.data['email']
@@ -76,11 +86,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             default_password = self.config_entry.data['password']
         if 'password' in self.config_entry.options:
             default_password = self.config_entry.options['password']
+        default_mark_alerts_as_read = True
+        if 'mark_alerts_as_read' in self.config_entry.data:
+            default_mark_alerts_as_read = self.config_entry.data['mark_alerts_as_read']
 
         OPTIONS_SCHEMA = vol.Schema(
             {
-                vol.Required('email', default=default_email): cv.string,
+                vol.Required('entry_name', default=default_entry_name): cv.string,
+                vol.Required('email', default=default_email): email_validator,
                 vol.Required('password', default=default_password): cv.string,
+                vol.Required('mark_alerts_as_read', default=default_mark_alerts_as_read): cv.boolean,
             }
         )
         return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA, errors=errors)

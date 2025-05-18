@@ -1,6 +1,6 @@
 {
   "domain": "pajgps",
-  "name": "PAJ GPS Tracker",
+  "name": "PAJ GPS",
   "documentation": "https://github.com/Skipperro/pajgps-homeassistant",
   "dependencies": [],
   "codeowners": ["Skipperro"],

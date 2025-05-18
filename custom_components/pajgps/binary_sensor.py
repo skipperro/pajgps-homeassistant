@@ -1,13 +1,13 @@
 """
 Platform for GPS sensor integration.
-This module is responsible for setting up the GPS sensor entities
+This module is responsible for setting up the battery level and speed sensor entities
 and updating their state based on the data received from the Paj GPS API.
 """
 from __future__ import annotations
 
 from datetime import timedelta
 
-from homeassistant.components.device_tracker.config_entry import TrackerEntity
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
@@ -19,24 +19,44 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
 
-class PajGPSPositionSensor(TrackerEntity):
+PAJGPS_ALERT_NAMES = {1: "Shock Alert", 2: "Battery Alert", 3: "Radius Alert", 4: "SOS Alert",
+                      5: "Speed Alert", 6: "Power Cut-off Alert", 7: "Ignition Alert",
+                      9: "Drop Alert", 10: "Area Enter Alert", 11: "Area Leave Alert",
+                      13: "Voltage Alert", 22: "Turn off Alert"}
+
+class PajGPSAlertSensor(BinarySensorEntity):
     """
-    Representation of a Paj GPS position sensor.
+    Representation of a Paj GPS alert sensor.
     Takes the data from base PajGPSData object created in async_setup_entry.
     """
     _pajgps_data = None
     _device_id = None
-    _longitude: float | None = None
-    _latitude: float | None = None
+    _alert_type: int = 0
+    _state: bool = False
 
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
+    def __init__(self, pajgps_data: PajGPSData, device_id: int, alert_type) -> None:
         """Initialize the sensor."""
         self._pajgps_data = pajgps_data
         self._device_id = device_id
+        self._alert_type = alert_type
+        alert_name = PAJGPS_ALERT_NAMES.get(alert_type, "Unknown Alert")
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.entry_name_identifier()}_{self._device_id}"
-        self._attr_name = f"{self._device_name} ({self._device_id})"
-        self._attr_icon = "mdi:map-marker"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.entry_name_identifier()}_{self._device_id}_alert_{self._alert_type}"
+
+        self._attr_name = f"{self._device_name} ({self._device_id}) {alert_name}"
+        self._attr_icon = "mdi:alert"
+
+    async def async_update(self) -> None:
+        """Update the sensor state."""
+        await self._pajgps_data.async_update()
+        alerts = self._pajgps_data.get_alerts(self._device_id)
+        self._state = False
+        if alerts is not None:
+            for alert in alerts:
+                if alert.device_id == self._device_id and alert.alert_type == self._alert_type:
+                    self._state = True
+                    break
+
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -60,41 +80,15 @@ class PajGPSPositionSensor(TrackerEntity):
         return True
 
     @property
-    def latitude(self) -> float | None:
-        """Return latitude value of the device."""
-        if self._latitude is not None:
-            return self._latitude
-        else:
-            return None
+    def device_class(self) -> BinarySensorDeviceClass | str | None:
+        return BinarySensorDeviceClass.PROBLEM
 
     @property
-    def longitude(self) -> float | None:
-        """Return longitude value of the device."""
-        if self._longitude is not None:
-            return self._longitude
-        else:
-            return None
+    def native_value(self) -> int | None:
+        """Return the state of the sensor."""
+        return self._state
 
 
-    @property
-    def source_type(self) -> str:
-        """Return the source type, eg gps or router, of the device."""
-        return "gps"
-
-    async def async_update(self) -> None:
-        """Update the GPS sensor data."""
-        await self._pajgps_data.async_update()
-        position_data = self._pajgps_data.get_position(self._device_id)
-        if position_data is not None:
-            if position_data.lat is not None and position_data.lng is not None:
-                self._latitude = position_data.lat
-                self._longitude = position_data.lng
-            else:
-                self._latitude = None
-                self._longitude = None
-        else:
-            self._latitude = None
-            self._longitude = None
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -124,16 +118,20 @@ async def async_setup_entry(
     # Add the Paj GPS position sensors to the entity registry
     devices = pajgps_data.get_device_ids()
     if devices is not None:
-        _LOGGER.debug("Adding Paj GPS position sensors")
+        _LOGGER.debug("Devices found: %s", devices)
         entities = []
         for device_id in devices:
-            # Check if the device is already in the entity registry
-            if not hass.data.get(DOMAIN):
-                _LOGGER.debug("Device %s not found in entity registry", device_id)
-                entities.append(PajGPSPositionSensor(pajgps_data, device_id))
-            else:
-                _LOGGER.debug("Device %s already exists in entity registry", device_id)
+            device = pajgps_data.get_device(device_id)
+            if device is not None:
+                if device.has_alarm_shock:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 1))
+                if device.has_alarm_sos:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 4))
+                if device.has_alarm_voltage:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 13))
+
         if entities and async_add_entities:
             async_add_entities(entities, update_before_add=True)
-
+    else:
+        _LOGGER.error("No devices found for entry: %s", entry_name)
 

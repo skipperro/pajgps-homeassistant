@@ -1,0 +1,37 @@
+{
+  "success": [
+    {
+      "id": "6825861dd3456f4dbeb415cf",
+      "lat": 48.87249333333333,
+      "lng": 12.58305,
+      "direction": 0,
+      "dateunix": 1747289627,
+      "battery": 1,
+      "speed": 0,
+      "iddevice": 1242185,
+      "steps": 0,
+      "heartbeat": 0,
+      "accuracy": 0,
+      "wifi": null,
+      "note": null,
+      "upt": null
+    },
+    {
+      "id": "682474e4d3456f4dbe37c03c",
+      "lat": 49.02280833333333,
+      "lng": 12.65645,
+      "direction": 265,
+      "dateunix": 1747219681,
+      "battery": 100,
+      "speed": 0,
+      "iddevice": 1237040,
+      "steps": 0,
+      "heartbeat": 0,
+      "accuracy": 0,
+      "wifi": null,
+      "note": null,
+      "upt": null
+    }
+  ],
+  "number_of_records": 2
+}

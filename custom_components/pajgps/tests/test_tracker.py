@@ -1,6 +1,6 @@
 import os
 import unittest
-import custom_components.pajgps.device_tracker as tracker
+import custom_components.pajgps.device_tracker_old as tracker
 from dotenv import load_dotenv
 
 class PajGpsTrackerTest(unittest.IsolatedAsyncioTestCase):
