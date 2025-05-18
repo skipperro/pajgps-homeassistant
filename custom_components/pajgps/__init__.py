@@ -2,10 +2,12 @@ import asyncio
 import logging
 
 from homeassistant import config_entries, core
+from homeassistant.const import Platform
 from homeassistant.helpers.device_registry import async_get as async_get_device_registry
 
 from .const import DOMAIN
 
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.DEVICE_TRACKER, Platform.BINARY_SENSOR]
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:
@@ -26,7 +28,7 @@ async def async_setup_entry(
     hass.data[DOMAIN][entry.entry_id] = hass_data
 
     # Forward the setup to the device_tracker platform
-    await hass.config_entries.async_forward_entry_setups(entry, ["device_tracker", "sensor", "binary_sensor"])
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
