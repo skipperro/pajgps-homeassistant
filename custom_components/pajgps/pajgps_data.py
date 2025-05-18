@@ -217,9 +217,9 @@ class PajGPSData:
             _LOGGER.error(f"{e}")
             return None
 
-    async def refresh_token(self):
+    async def refresh_token(self, forced: bool = False) -> None:
         # Refresh token once every 10 minutes
-        if (time.time() - self.last_token_update > self.token_ttl) or self.token is None:
+        if (time.time() - self.last_token_update > self.token_ttl) or self.token is None or forced:
             _LOGGER.debug("Refreshing token...")
             try:
                 email = self.email # self.hass.config_entries.async_entries(DOMAIN)[0].data["email"]

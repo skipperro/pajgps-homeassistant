@@ -63,39 +63,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> Dict[str, Any]:
         errors: Dict[str, str] = {}
 
-        if user_input is not None:
-            # If email is null or empty string, add error
-            if not user_input['email'] or user_input['email'] == '':
-                errors['base'] = 'email_required'
-            # If password is null or empty string, add error
-            if not user_input['password'] or user_input['password'] == '':
-                errors['base'] = 'password_required'
-            if not errors:
-                # Update the config entry with the new data
-                new_data = {
-                    'entry_name': user_input['entry_name'],
-                    'email': user_input['email'],
-                    'password': user_input['password'],
-                    'mark_alerts_as_read': user_input['mark_alerts_as_read'],
-                }
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=self.config_entry.data, options=self.config_entry.options
-                )
-                # Get the instance of PajGPSData with old data
-                paj_data = PajGPSData.get_instance(
-                    self.config_entry.data['entry_name'],
-                    self.config_entry.data['email'],
-                    self.config_entry.data['password'],
-                    self.config_entry.data['mark_alerts_as_read'],
-                )
-                # Update the data with new data
-                paj_data.entry_name = new_data['entry_name']
-                paj_data.email = new_data['email']
-                paj_data.password = new_data['password']
-                paj_data.mark_alerts_as_read = new_data['mark_alerts_as_read']
-
-                return self.async_create_entry(title=f"{new_data['entry_name']}", data=new_data)
-
         default_entry_name = ''
         if 'entry_name' in self.config_entry.data:
             default_entry_name = self.config_entry.data['entry_name']
@@ -116,6 +83,44 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             default_mark_alerts_as_read = self.config_entry.data['mark_alerts_as_read']
         if 'mark_alerts_as_read' in self.config_entry.options:
             default_mark_alerts_as_read = self.config_entry.options['mark_alerts_as_read']
+
+        if user_input is not None:
+            # If email is null or empty string, add error
+            if not user_input['email'] or user_input['email'] == '':
+                errors['base'] = 'email_required'
+            # If password is null or empty string, add error
+            if not user_input['password'] or user_input['password'] == '':
+                errors['base'] = 'password_required'
+            if not errors:
+                # Update the config entry with the new data
+                new_data = {
+                    'entry_name': user_input['entry_name'],
+                    'email': user_input['email'],
+                    'password': user_input['password'],
+                    'mark_alerts_as_read': user_input['mark_alerts_as_read'],
+                }
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=self.config_entry.data, options=self.config_entry.options
+                )
+                # Get the instance of PajGPSData with old data
+                paj_data = PajGPSData.get_instance(
+                    default_entry_name,
+                    default_email,
+                    default_password,
+                    default_mark_alerts_as_read,
+                )
+                # Update the data with new data
+                paj_data.entry_name = new_data['entry_name']
+                paj_data.email = new_data['email']
+                paj_data.password = new_data['password']
+                paj_data.mark_alerts_as_read = new_data['mark_alerts_as_read']
+
+                await paj_data.refresh_token(True)
+                await paj_data.async_update(True)
+
+                return self.async_create_entry(title=f"{new_data['entry_name']}", data=new_data)
+
+
 
         OPTIONS_SCHEMA = vol.Schema(
             {
