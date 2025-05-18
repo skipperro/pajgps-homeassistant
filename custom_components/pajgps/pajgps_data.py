@@ -289,21 +289,19 @@ class PajGPSData:
         """Get device ids."""
         return [device.id for device in self.devices]
 
-    def get_device_info(self, device_id: int) -> DeviceInfo | None:
+    def get_device_info(self, device_id: int) -> dict | None:
         """Get device info by id."""
         for device in self.devices:
             if device.id == device_id:
-                dev_info = DeviceInfo(
-                    identifiers={
-                        (DOMAIN,
-                         f"{self.entry_name_identifier()}-{device.id}",)
+                return {
+                    "identifiers": {
+                        (DOMAIN, f"{self.entry_name_identifier()}-{device.id}")
                     },
-                    name=f"{device.name} ({device.id})",
-                    manufacturer="PAJ GPS",
-                    model=device.model,
-                    sw_version=VERSION,
-                )
-                return dev_info
+                    "name": f"{device.name} ({device.id})",
+                    "manufacturer": "PAJ GPS",
+                    "model": device.model,
+                    "sw_version": VERSION,
+                }
         return None
 
     def get_position(self, device_id: int) -> PajGPSPositionData | None:
