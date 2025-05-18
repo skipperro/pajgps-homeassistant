@@ -11,9 +11,6 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:
     """Set up the integration."""
     hass.data.setdefault(DOMAIN, {})
-    hass.helpers.discovery.load_platform('device_tracker', DOMAIN, {}, config)
-    hass.helpers.discovery.load_platform('sensor', DOMAIN, {}, config)
-    hass.helpers.discovery.load_platform('binary_sensor', DOMAIN, {}, config)
     return True
 
 async def async_setup_entry(
