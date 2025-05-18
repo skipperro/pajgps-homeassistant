@@ -303,6 +303,7 @@ class PajGPSData:
                     model=device.model,
                     sw_version=VERSION,
                 )
+                return dev_info
         return None
 
     def get_position(self, device_id: int) -> PajGPSPositionData | None:
