@@ -10,6 +10,8 @@ import logging
 import time
 from datetime import timedelta
 import aiohttp
+from homeassistant.helpers.device_registry import DeviceInfo
+from custom_components.pajgps.const import DOMAIN, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
@@ -286,6 +288,22 @@ class PajGPSData:
     def get_device_ids(self) -> list[int]:
         """Get device ids."""
         return [device.id for device in self.devices]
+
+    def get_device_info(self, device_id: int) -> DeviceInfo | None:
+        """Get device info by id."""
+        for device in self.devices:
+            if device.id == device_id:
+                dev_info = DeviceInfo(
+                    identifiers={
+                        (DOMAIN,
+                         f"{self.entry_name_identifier()}-{device.id}",)
+                    },
+                    name=f"{device.name} ({device.id})",
+                    manufacturer="PAJ GPS",
+                    model=device.model,
+                    sw_version=VERSION,
+                )
+        return None
 
     def get_position(self, device_id: int) -> PajGPSPositionData | None:
         """Get position data by device id."""

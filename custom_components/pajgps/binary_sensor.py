@@ -57,26 +57,12 @@ class PajGPSAlertSensor(BinarySensorEntity):
                     self._state = True
                     break
 
-
     @property
     def device_info(self) -> DeviceInfo | None:
         """Return the device info."""
         if self._pajgps_data is None:
             return None
-        if self._pajgps_data.get_device(self._device_id) is None:
-            return None
-        if self._pajgps_data.get_device(self._device_id).model is None:
-            return None
-        return DeviceInfo(
-            identifiers={
-                (DOMAIN,
-                 f"{self._device_name}-{self._device_id}",)
-            },
-            name=f"{self._device_name} ({self._device_id})",
-            manufacturer="PAJ GPS",
-            model=self._pajgps_data.get_device(self._device_id).model,
-            sw_version=VERSION,
-        )
+        return self._pajgps_data.get_device_info(self._device_id)
 
     @property
     def should_poll(self) -> bool:

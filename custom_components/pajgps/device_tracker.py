@@ -34,7 +34,7 @@ class PajGPSPositionSensor(TrackerEntity):
         self._pajgps_data = pajgps_data
         self._device_id = device_id
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.entry_name_identifier()}_{self._device_id}"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.entry_name_identifier()}_{self._device_id}_gps"
         self._attr_name = f"{self._device_name} ({self._device_id})"
         self._attr_icon = "mdi:map-marker"
 
@@ -43,21 +43,7 @@ class PajGPSPositionSensor(TrackerEntity):
         """Return the device info."""
         if self._pajgps_data is None:
             return None
-        if self._pajgps_data.get_device(self._device_id) is None:
-            return None
-        if self._pajgps_data.get_device(self._device_id).model is None:
-            return None
-
-        return DeviceInfo(
-            identifiers={
-                (DOMAIN,
-                 f"{self._device_name}-{self._device_id}",)
-            },
-            name=f"{self._device_name} ({self._device_id})",
-            manufacturer="PAJ GPS",
-            model=self._pajgps_data.get_device(self._device_id).model,
-            sw_version=VERSION,
-        )
+        return self._pajgps_data.get_device_info(self._device_id)
 
     @property
     def should_poll(self) -> bool:

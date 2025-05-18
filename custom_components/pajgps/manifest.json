@@ -8,6 +8,6 @@
   "iot_class": "cloud_polling",
   "config_flow": true,
   "version": "0.6.0",
-  "integration_type": "hub",
+  "integration_type": "service",
   "supported_platforms": ["device_tracker", "sensor", "binary_sensor"]
 }
