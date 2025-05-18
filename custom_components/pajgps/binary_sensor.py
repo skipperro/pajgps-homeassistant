@@ -87,17 +87,10 @@ class PajGPSAlertSensor(BinarySensorEntity):
         return BinarySensorDeviceClass.PROBLEM
 
     @property
-    def native_value(self) -> bool | None:
-        """Return the state of the sensor."""
-        return self._state
-
-    @property
     def is_on(self) -> bool | None:
         """Return if the binary sensor is on."""
         # This needs to enumerate to true or false
         return self._state
-
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
