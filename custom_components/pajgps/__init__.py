@@ -4,6 +4,7 @@ from homeassistant import config_entries, core
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from .pajgps_data import PajGPSData
 from .const import DOMAIN
 
 PLATFORMS: list[Platform] = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.BINARY_SENSOR]
@@ -22,10 +23,19 @@ async def async_setup_entry(
         entry.add_update_listener(_async_update_listener)
     )
 
+    await async_initialize_data(entry)
+
     # Forward the setup to the device_tracker platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
+
+async def async_initialize_data(entry: config_entries.ConfigEntry):
+    """Initialize the PajGPS data object."""
+    # Create a new PajGPSData object
+    data = PajGPSData(entry.data["entry_name"], entry.data["username"], entry.data["password"], entry.data["mark_alerts_as_read"])
+    # Initialize the data object
+    await data.async_update()
 
 async def async_remove_config_entry_device(
     hass: core.HomeAssistant, config_entry: config_entries.ConfigEntry, device_entry
