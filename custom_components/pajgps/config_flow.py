@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 
+from . import PajGPSData
 from .const import DOMAIN
 
 big_int = vol.All(vol.Coerce(int), vol.Range(min=300))
@@ -80,6 +81,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data=self.config_entry.data, options=self.config_entry.options
                 )
+                # Get the instance of PajGPSData with old data
+                paj_data = PajGPSData.get_instance(
+                    self.config_entry.data['entry_name'],
+                    self.config_entry.data['email'],
+                    self.config_entry.data['password'],
+                    self.config_entry.data['mark_alerts_as_read'],
+                )
+                # Update the data with new data
+                paj_data.entry_name = new_data['entry_name']
+                paj_data.email = new_data['email']
+                paj_data.password = new_data['password']
+                paj_data.mark_alerts_as_read = new_data['mark_alerts_as_read']
+
                 return self.async_create_entry(title=f"{new_data['entry_name']}", data=new_data)
 
         default_entry_name = ''
@@ -100,6 +114,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         default_mark_alerts_as_read = True
         if 'mark_alerts_as_read' in self.config_entry.data:
             default_mark_alerts_as_read = self.config_entry.data['mark_alerts_as_read']
+        if 'mark_alerts_as_read' in self.config_entry.options:
+            default_mark_alerts_as_read = self.config_entry.options['mark_alerts_as_read']
 
         OPTIONS_SCHEMA = vol.Schema(
             {
