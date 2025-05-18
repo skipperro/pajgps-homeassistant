@@ -106,7 +106,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 PajGPSData.clean_instances()
 
                 # Remove the old config entry
-                await self.hass.config_entries.async_remove(self.config_entry.entry_id)
+                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
                 # Create main Paj GPS data object from pajgps_data.py
                 paj_data = PajGPSData.get_instance(
