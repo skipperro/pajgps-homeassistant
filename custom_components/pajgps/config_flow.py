@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = vol.Schema(
             {
                 vol.Required('entry_name', default='My Paj GPS Account'): cv.string,
-                vol.Required('email', default=''): email_validator,
+                vol.Required('email', default=''): cv.string,
                 vol.Required('password', default=''): cv.string,
                 vol.Required('mark_alerts_as_read', default=True): cv.boolean,
             }
@@ -93,7 +93,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         OPTIONS_SCHEMA = vol.Schema(
             {
                 vol.Required('entry_name', default=default_entry_name): cv.string,
-                vol.Required('email', default=default_email): email_validator,
+                vol.Required('email', default=default_email): cv.string,
                 vol.Required('password', default=default_password): cv.string,
                 vol.Required('mark_alerts_as_read', default=default_mark_alerts_as_read): cv.boolean,
             }

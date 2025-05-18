@@ -127,13 +127,10 @@ async def async_setup_entry(
         _LOGGER.debug("Adding Paj GPS position sensors")
         entities = []
         for device_id in devices:
-            # Check if the device is already in the entity registry
-            if not hass.data.get(DOMAIN):
-                _LOGGER.debug("Device %s not found in entity registry", device_id)
-                entities.append(PajGPSPositionSensor(pajgps_data, device_id))
-            else:
-                _LOGGER.debug("Device %s already exists in entity registry", device_id)
+            entities.append(PajGPSPositionSensor(pajgps_data, device_id))
         if entities and async_add_entities:
             async_add_entities(entities, update_before_add=True)
+        else:
+            _LOGGER.warning("No new Paj GPS devices to add")
 
 
