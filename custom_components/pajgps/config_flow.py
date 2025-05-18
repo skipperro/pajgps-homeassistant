@@ -63,26 +63,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: Dict[str, str] = {}
 
         if user_input is not None:
-            self.data = user_input
             # If email is null or empty string, add error
-            if not self.data['email'] or self.data['email'] == '':
+            if not user_input['email'] or user_input['email'] == '':
                 errors['base'] = 'email_required'
             # If password is null or empty string, add error
-            if not self.data['password'] or self.data['password'] == '':
+            if not user_input['password'] or user_input['password'] == '':
                 errors['base'] = 'password_required'
             if not errors:
                 # Update the config entry with the new data
+                new_data = {
+                    'entry_name': user_input['entry_name'],
+                    'email': user_input['email'],
+                    'password': user_input['password'],
+                    'mark_alerts_as_read': user_input['mark_alerts_as_read'],
+                }
                 self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    data={
-                        **self.config_entry.data,
-                        **user_input,
-                    },
-                    options={
-                        **self.config_entry.options,
-                        **user_input,
-                    },
+                    self.config_entry, data=self.config_entry.data, options=self.config_entry.options
                 )
+                return self.async_create_entry(title=f"{new_data['entry_name']}", data=new_data)
 
         default_entry_name = ''
         if 'entry_name' in self.config_entry.data:
