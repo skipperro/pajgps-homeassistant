@@ -32,10 +32,13 @@ async def async_setup_entry(
 
 async def async_initialize_data(entry: config_entries.ConfigEntry):
     """Initialize the PajGPS data object."""
-    # Create a new PajGPSData object
-    data = PajGPSData(entry.data["entry_name"], entry.data["username"], entry.data["password"], entry.data["mark_alerts_as_read"])
-    # Initialize the data object
-    await data.async_update()
+    try:
+        # Create a new PajGPSData object
+        data = PajGPSData(entry.data["entry_name"], entry.data["email"], entry.data["password"], entry.data["mark_alerts_as_read"])
+        # Initialize the data object
+        await data.async_update()
+    except Exception as e:
+        _LOGGER.error(f"Failed to initialize PajGPS data: {e}")
 
 async def async_remove_config_entry_device(
     hass: core.HomeAssistant, config_entry: config_entries.ConfigEntry, device_entry
