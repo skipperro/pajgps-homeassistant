@@ -81,7 +81,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             default_email = self.config_entry.data['email']
         if 'email' in self.config_entry.options:
             default_email = self.config_entry.options['email']
-        default_password = False
+        default_password = ''
         if 'password' in self.config_entry.data:
             default_password = self.config_entry.data['password']
         if 'password' in self.config_entry.options:
