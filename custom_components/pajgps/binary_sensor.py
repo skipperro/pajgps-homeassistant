@@ -67,13 +67,16 @@ class PajGPSAlertSensor(BinarySensorEntity):
             return None
         if self._pajgps_data.get_device(self._device_id).model is None:
             return None
-        return {
-            "identifiers": {(DOMAIN, self._device_id)},
-            "name": self._attr_name,
-            "manufacturer": "PAJ GPS",
-            "model": self._pajgps_data.get_device(self._device_id).model,
-            "sw_version": VERSION,
-        }
+        return DeviceInfo(
+            identifiers={
+                (DOMAIN,
+                 f"{self._device_name}-{self._device_id}",)
+            },
+            name=f"{self._device_name} ({self._device_id})",
+            manufacturer="PAJ GPS",
+            model=self._pajgps_data.get_device(self._device_id).model,
+            sw_version=VERSION,
+        )
 
     @property
     def should_poll(self) -> bool:
@@ -84,8 +87,14 @@ class PajGPSAlertSensor(BinarySensorEntity):
         return BinarySensorDeviceClass.PROBLEM
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> bool | None:
         """Return the state of the sensor."""
+        return self._state
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return if the binary sensor is on."""
+        # This needs to enumerate to true or false
         return self._state
 
 

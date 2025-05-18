@@ -7,7 +7,7 @@ from homeassistant.helpers.device_registry import async_get as async_get_device_
 
 from .const import DOMAIN
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.DEVICE_TRACKER, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.BINARY_SENSOR]
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: core.HomeAssistant, config: dict) -> bool:

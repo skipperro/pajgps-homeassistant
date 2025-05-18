@@ -169,13 +169,16 @@ class PajGPSSpeedSensor(SensorEntity):
             return None
         if self._pajgps_data.get_device(self._device_id).model is None:
             return None
-        return {
-            "identifiers": {(DOMAIN, self._device_id)},
-            "name": self._attr_name,
-            "manufacturer": "PAJ GPS",
-            "model": self._pajgps_data.get_device(self._device_id).model,
-            "sw_version": VERSION,
-        }
+        return DeviceInfo(
+            identifiers={
+                (DOMAIN,
+                 f"{self._device_name}-{self._device_id}",)
+            },
+            name=f"{self._device_name} ({self._device_id})",
+            manufacturer="PAJ GPS",
+            model=self._pajgps_data.get_device(self._device_id).model,
+            sw_version=VERSION,
+        )
 
     @property
     def should_poll(self) -> bool:
