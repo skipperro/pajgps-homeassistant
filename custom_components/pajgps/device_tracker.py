@@ -47,12 +47,18 @@ class PajGPSPositionSensor(TrackerEntity):
             return None
         if self._pajgps_data.get_device(self._device_id).model is None:
             return None
+        # Get battery level from the device
+        battery_level: int | None = None
+        position = self._pajgps_data.get_position(self._device_id)
+        if position is not None and position.battery is not None:
+            battery_level = position.battery
         return {
             "identifiers": {(DOMAIN, self._device_id)},
             "name": self._attr_name,
             "manufacturer": "PAJ GPS",
             "model": self._pajgps_data.get_device(self._device_id).model,
             "sw_version": VERSION,
+            "battery": battery_level,
         }
 
     @property
