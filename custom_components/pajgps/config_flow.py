@@ -71,11 +71,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if not self.data['password'] or self.data['password'] == '':
                 errors['base'] = 'password_required'
             if not errors:
-                return self.async_create_entry(title=f"{self.data['entry_name']}", data={'entry_name': user_input['entry_name'], 'email': user_input['email'], 'password': user_input['password'], 'mark_alerts_as_read': user_input['mark_alerts_as_read']})
+                # Update the config entry with the new data
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={
+                        **self.config_entry.data,
+                        **user_input,
+                    },
+                    options={
+                        **self.config_entry.options,
+                        **user_input,
+                    },
+                )
 
         default_entry_name = ''
         if 'entry_name' in self.config_entry.data:
             default_entry_name = self.config_entry.data['entry_name']
+        if 'entry_name' in self.config_entry.options:
+            default_entry_name = self.config_entry.options['entry_name']
         default_email = ''
         if 'email' in self.config_entry.data:
             default_email = self.config_entry.data['email']
