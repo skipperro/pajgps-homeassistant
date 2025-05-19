@@ -12,17 +12,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 
-from custom_components.pajgps.const import DOMAIN, VERSION
+from custom_components.pajgps.const import DOMAIN, VERSION, ALERT_NAMES
 from custom_components.pajgps.pajgps_data import PajGPSData
 import logging
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-
-PAJGPS_ALERT_NAMES = {1: "Shock Alert", 2: "Battery Alert", 3: "Radius Alert", 4: "SOS Alert",
-                      5: "Speed Alert", 6: "Power Cut-off Alert", 7: "Ignition Alert",
-                      9: "Drop Alert", 10: "Area Enter Alert", 11: "Area Leave Alert",
-                      13: "Voltage Alert", 22: "Turn off Alert"}
 
 class PajGPSAlertSensor(BinarySensorEntity):
     """
@@ -39,11 +34,10 @@ class PajGPSAlertSensor(BinarySensorEntity):
         self._pajgps_data = pajgps_data
         self._device_id = device_id
         self._alert_type = alert_type
-        alert_name = PAJGPS_ALERT_NAMES.get(alert_type, "Unknown Alert")
+        alert_name = ALERT_NAMES.get(alert_type, "Unknown Alert")
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
         self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_alert_{self._alert_type}"
-
-        self._attr_name = f"{self._device_name} ({self._device_id}) {alert_name}"
+        self._attr_name = f"{alert_name}"
         self._attr_icon = "mdi:alert"
 
     async def async_update(self) -> None:
@@ -114,10 +108,22 @@ async def async_setup_entry(
             if device is not None:
                 if device.has_alarm_shock:
                     entities.append(PajGPSAlertSensor(pajgps_data, device_id, 1))
+                if device.has_alarm_battery:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 2))
                 if device.has_alarm_sos:
                     entities.append(PajGPSAlertSensor(pajgps_data, device_id, 4))
+                if device.has_alarm_speed:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 5))
+                if device.has_alarm_power_cutoff:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 6))
+                if device.has_alarm_ignition:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 7))
+                if device.has_alarm_drop:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 9))
                 if device.has_alarm_voltage:
                     entities.append(PajGPSAlertSensor(pajgps_data, device_id, 13))
+                if device.has_alarm_turn_off:
+                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 22))
 
         if entities and async_add_entities:
             async_add_entities(entities, update_before_add=True)

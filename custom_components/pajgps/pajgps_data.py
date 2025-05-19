@@ -11,7 +11,7 @@ import time
 from datetime import timedelta
 import aiohttp
 from homeassistant.helpers.device_registry import DeviceInfo
-from custom_components.pajgps.const import DOMAIN, VERSION
+from custom_components.pajgps.const import DOMAIN, VERSION, ALERT_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
@@ -37,6 +37,18 @@ class PajGPSDevice:
     alarm_shock_enabled: bool
     has_alarm_voltage: bool
     alarm_voltage_enabled: bool
+    has_alarm_battery: bool
+    alarm_battery_enabled: bool
+    has_alarm_speed: bool
+    alarm_speed_enabled: bool
+    has_alarm_power_cutoff: bool
+    alarm_power_cutoff_enabled: bool
+    has_alarm_ignition: bool
+    alarm_ignition_enabled: bool
+    has_alarm_drop: bool
+    alarm_drop_enabled: bool
+    has_alarm_turn_off: bool
+    alarm_turn_off_enabled: bool
 
     def __init__(self, id: int) -> None:
         """Initialize the PajGPSDevice class."""
