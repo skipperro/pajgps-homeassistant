@@ -99,22 +99,21 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     'password': user_input['password'],
                     'mark_alerts_as_read': user_input['mark_alerts_as_read'],
                 }
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=self.config_entry.data, options=self.config_entry.options
-                )
-                # Cleanup the old data
-                PajGPSData.clean_instances()
 
-                # Remove the old config entry
+                # Get existing instance of PajGPSData
+                paj_data = PajGPSData.get_instance(
+                    self.config_entry.data['entry_name'],
+                    self.config_entry.data['email'],
+                    self.config_entry.data['password'],
+                    self.config_entry.data['mark_alerts_as_read']
+                )
+                paj_data.entry_name = new_data['entry_name']
+                paj_data.email = new_data['email']
+                paj_data.password = new_data['password']
+                paj_data.mark_alerts_as_read = new_data['mark_alerts_as_read']
+
                 self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
-                # Create main Paj GPS data object from pajgps_data.py
-                paj_data = PajGPSData.get_instance(
-                    new_data['entry_name'],
-                    new_data['email'],
-                    new_data['password'],
-                    new_data['mark_alerts_as_read']
-                )
                 await paj_data.refresh_token(True)
                 await paj_data.async_update(True)
 

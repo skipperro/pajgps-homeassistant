@@ -295,7 +295,7 @@ class PajGPSData:
             if device.id == device_id:
                 return {
                     "identifiers": {
-                        (DOMAIN, f"{self.entry_name_identifier()}-{device.id}")
+                        (DOMAIN, f"{device.id}")
                     },
                     "name": f"{device.name} ({device.id})",
                     "manufacturer": "PAJ GPS",
