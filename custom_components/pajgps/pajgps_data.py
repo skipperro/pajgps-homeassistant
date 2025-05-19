@@ -47,8 +47,6 @@ class PajGPSDevice:
     alarm_ignition_enabled: bool
     has_alarm_drop: bool
     alarm_drop_enabled: bool
-    has_alarm_turn_off: bool
-    alarm_turn_off_enabled: bool
 
     def __init__(self, id: int) -> None:
         """Initialize the PajGPSDevice class."""
@@ -317,7 +315,7 @@ class PajGPSData:
                     "identifiers": {
                         (DOMAIN, f"{self.guid}_{device.id}")
                     },
-                    "name": f"{device.name} ({device.id})",
+                    "name": f"{device.name}",
                     "manufacturer": "PAJ GPS",
                     "model": device.model,
                     "sw_version": VERSION,
@@ -429,9 +427,19 @@ class PajGPSData:
                 device_data.has_alarm_sos = device["device_models"][0]["alarm_sos"] == 1
                 device_data.has_alarm_shock = device["device_models"][0]["alarm_erschuetterung"] == 1
                 device_data.has_alarm_voltage = device["device_models"][0]["alarm_volt"] == 1
+                device_data.has_alarm_battery = device["device_models"][0]["alarm_batteriestand"] == 1
+                device_data.has_alarm_speed = device["device_models"][0]["alarm_geschwindigkeit"] == 1
+                device_data.has_alarm_power_cutoff = device["device_models"][0]["alarm_stromunterbrechung"] == 1
+                device_data.has_alarm_ignition = device["device_models"][0]["alarm_zuendalarm"] == 1
+                device_data.has_alarm_drop = device["device_models"][0]["alarm_fall"] == 1
                 device_data.alarm_sos_enabled = device["alarmsos"] == 1
                 device_data.alarm_shock_enabled = device["alarmbewegung"] == 1
                 device_data.alarm_voltage_enabled = device["alarm_volt"] == 1
+                device_data.alarm_battery_enabled = device["alarmakkuwarnung"] == 1
+                device_data.alarm_speed_enabled = device["alarmgeschwindigkeit"] == 1
+                device_data.alarm_power_cutoff_enabled = device["alarmstromunterbrechung"] == 1
+                device_data.alarm_ignition_enabled = device["alarmzuendalarm"] == 1
+                device_data.alarm_drop_enabled = device["alarm_fall_enabled"] == 1
                 new_devices.append(device_data)
             self.devices = new_devices
         except ApiError as e:

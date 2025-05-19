@@ -37,8 +37,8 @@ class PajGPSAlertSensor(BinarySensorEntity):
         alert_name = ALERT_NAMES.get(alert_type, "Unknown Alert")
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
         self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_alert_{self._alert_type}"
-        self._attr_name = f"{alert_name}"
-        self._attr_icon = "mdi:alert"
+        self._attr_name = f"{self._device_name} {alert_name}"
+        self._attr_icon = "mdi:bell"
 
     async def async_update(self) -> None:
         """Update the sensor state."""
@@ -50,6 +50,13 @@ class PajGPSAlertSensor(BinarySensorEntity):
                 if alert.device_id == self._device_id and alert.alert_type == self._alert_type:
                     self._state = True
                     break
+
+    @property
+    def icon(self) -> str | None:
+        """Return the icon of the sensor."""
+        if self._state:
+            return "mdi:bell-alert"
+        return "mdi:bell"
 
     @property
     def device_info(self) -> DeviceInfo | None:
