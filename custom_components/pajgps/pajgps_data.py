@@ -489,21 +489,3 @@ class PajGPSData:
             _LOGGER.error(f"Error while changing alert state: {e.error}")
         except Exception as e:
             _LOGGER.error(f"{e}")
-
-    def email_as_identifier(self) -> str:
-        """
-        Convert email to identifier for the device registry.
-        This is used to create a unique identifier for the device in the device registry.
-        The "@" character is replaced with "_at_" to avoid issues with the device registry.
-        The "." character is replaced with "_" to avoid issues with the device registry.
-        """
-        return self.email.replace("@", "_at_").replace(".", "_")
-
-    def entry_name_identifier(self) -> str:
-        """
-        Convert entry name to identifier for the device registry.
-        This is used to create a unique identifier for the device in the device registry.
-        The " " character is replaced with "_" to avoid issues with the device registry.
-        The whole string will be converted to lowercase to avoid issues with the device registry.
-        """
-        return self.entry_name.replace(" ", "_").lower()

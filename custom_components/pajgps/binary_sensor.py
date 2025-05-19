@@ -41,7 +41,7 @@ class PajGPSAlertSensor(BinarySensorEntity):
         self._alert_type = alert_type
         alert_name = PAJGPS_ALERT_NAMES.get(alert_type, "Unknown Alert")
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.entry_name_identifier()}_{self._device_id}_alert_{self._alert_type}"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_alert_{self._alert_type}"
 
         self._attr_name = f"{self._device_name} ({self._device_id}) {alert_name}"
         self._attr_icon = "mdi:alert"

@@ -34,7 +34,7 @@ class PajGPSPositionSensor(TrackerEntity):
         self._pajgps_data = pajgps_data
         self._device_id = device_id
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.entry_name_identifier()}_{self._device_id}_gps"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_gps"
         self._attr_name = f"{self._device_name} ({self._device_id})"
         self._attr_icon = "mdi:map-marker"
 
