@@ -34,7 +34,7 @@ async def async_initialize_data(entry: config_entries.ConfigEntry):
     """Initialize the PajGPS data object."""
     try:
         # Create a new PajGPSData object
-        data = PajGPSData.get_instance(entry.data["entry_name"], entry.data["email"], entry.data["password"], entry.data["mark_alerts_as_read"])
+        data = PajGPSData.get_instance(entry.data["guid"], entry.data["entry_name"], entry.data["email"], entry.data["password"], entry.data["mark_alerts_as_read"])
         # Initialize the data object
         await data.async_update(True)
     except Exception as e:

@@ -90,6 +90,7 @@ async def async_setup_entry(
     entry_name = config_entry.data.get("entry_name", "My Paj GPS account")
 
     # Validate email and password
+    guid = config_entry.data.get("guid")
     email = config_entry.data.get("email")
     password = config_entry.data.get("password")
     mark_alerts_as_read = config_entry.data.get("mark_alerts_as_read", True)
@@ -98,7 +99,7 @@ async def async_setup_entry(
         return
 
     # Create main Paj GPS data object from pajgps_data.py
-    pajgps_data = PajGPSData.get_instance(entry_name, email, password, mark_alerts_as_read)
+    pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read)
 
     # Update the data
     await pajgps_data.async_update()

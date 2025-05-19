@@ -1,6 +1,7 @@
 """Config flow for PAJ GPS Tracker integration."""
 from __future__ import annotations
 import logging
+import uuid
 from typing import Any, Dict, Optional
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -32,6 +33,8 @@ class CustomFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: Dict[str, str] = {}
         if user_input is not None:
             self.data = user_input
+            # Create new guid for the entry
+            self.data['guid'] = str(uuid.uuid4())
             # If entry_name is null or empty string, add error
             if not self.data['entry_name'] or self.data['entry_name'] == '':
                 errors['base'] = 'entry_name_required'
@@ -94,6 +97,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if not errors:
                 # Update the config entry with the new data
                 new_data = {
+                    'guid': self.config_entry.data['guid'],
                     'entry_name': user_input['entry_name'],
                     'email': user_input['email'],
                     'password': user_input['password'],
@@ -102,6 +106,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
                 # Get existing instance of PajGPSData
                 paj_data = PajGPSData.get_instance(
+                    self.config_entry.data['guid'],
                     self.config_entry.data['entry_name'],
                     self.config_entry.data['email'],
                     self.config_entry.data['password'],
@@ -116,6 +121,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
                 await paj_data.refresh_token(True)
                 await paj_data.async_update(True)
+
+                # Rename the entry in the UI
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data=new_data,
+                    title=new_data['entry_name'],
+                )
 
                 return self.async_create_entry(title=f"{new_data['entry_name']}", data=new_data)
 

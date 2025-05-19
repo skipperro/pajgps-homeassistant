@@ -18,7 +18,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         password = os.getenv('PAJGPS_PASSWORD')
         entry_name = "test_entry"
         pajgps_data.PajGPSData.clean_instances()
-        self.data = pajgps_data.PajGPSData.get_instance(entry_name, email, password, False)
+        self.data = pajgps_data.PajGPSData.get_instance("test-guid", entry_name, email, password, False)
 
 
     async def test_login(self):
@@ -88,9 +88,10 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         password_2 = "password_2"
 
         pajgps_data.PajGPSData.clean_instances()
-        data_1 = pajgps_data.PajGPSData.get_instance(entry_name_1, email_1, password_1, False)
-        data_2 = pajgps_data.PajGPSData.get_instance(entry_name_2, email_2, password_2, False)
+        data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name_1, email_1, password_1, False)
+        data_2 = pajgps_data.PajGPSData.get_instance("guid2", entry_name_2, email_2, password_2, False)
         assert data_1 is not data_2
+        assert data_1.guid != data_2.guid
         assert data_1.entry_name != data_2.entry_name
         assert data_1.email != data_2.email
         assert data_1.password != data_2.password
@@ -103,9 +104,10 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         email = "email@email.com"
         password = "password"
         pajgps_data.PajGPSData.clean_instances()
-        data_1 = pajgps_data.PajGPSData.get_instance(entry_name, email, password, False)
-        data_2 = pajgps_data.PajGPSData.get_instance(entry_name, email, password, False)
+        data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False)
+        data_2 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False)
         assert data_1 is data_2
+        assert data_1.guid == data_2.guid
         assert data_1.entry_name == data_2.entry_name
         assert data_1.email == data_2.email
         assert data_1.password == data_2.password

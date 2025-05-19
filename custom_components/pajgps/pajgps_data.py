@@ -94,6 +94,8 @@ PajGPSDataInstances: dict[str, "PajGPSData"] = {}
 class PajGPSData:
     """Main class for PajGPS data handling."""
 
+    guid: str
+
     # Credentials properties
     email: str
     password: str
@@ -117,23 +119,24 @@ class PajGPSData:
     alerts: list[PajGPSAlert] = []
     positions: list[PajGPSPositionData] = []
 
-    def __init__(self, entry_name: str, email: str, password: str, mark_alerts_as_read: bool) -> None:
+    def __init__(self, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool) -> None:
         """
         Initialize the PajGPSData class.
         """
+        self.guid = guid
         self.entry_name = entry_name
         self.email = email
         self.password = password
         self.mark_alerts_as_read = mark_alerts_as_read
 
     @classmethod
-    def get_instance(cls, entry_name: str, email: str, password: str, mark_alerts_as_read: bool) -> "PajGPSData":
+    def get_instance(cls, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool) -> "PajGPSData":
         """
         Get or create a singleton instance of PajGPSData for the given entry_name.
         """
-        if entry_name not in PajGPSDataInstances:
-            PajGPSDataInstances[entry_name] = cls(entry_name, email, password, mark_alerts_as_read)
-        return PajGPSDataInstances[entry_name]
+        if guid not in PajGPSDataInstances:
+            PajGPSDataInstances[guid] = cls(guid, entry_name, email, password, mark_alerts_as_read)
+        return PajGPSDataInstances[guid]
 
     @classmethod
     def clean_instances(cls) -> None:
@@ -235,9 +238,14 @@ class PajGPSData:
                     _LOGGER.error("Failed to refresh token.")
             except Exception as e:
                 _LOGGER.error(f"Error during token refresh: {e}")
+                self.clean_data()
         else:
             _LOGGER.debug("Token refresh skipped (still valid).")
 
+    def clean_data(self):
+        self.devices = []
+        self.alerts = []
+        self.positions = []
 
     def get_standard_headers(self) -> dict:
         """
@@ -295,7 +303,7 @@ class PajGPSData:
             if device.id == device_id:
                 return {
                     "identifiers": {
-                        (DOMAIN, f"{device.id}")
+                        (DOMAIN, f"{self.guid}_{device.id}")
                     },
                     "name": f"{device.name} ({device.id})",
                     "manufacturer": "PAJ GPS",
@@ -348,8 +356,10 @@ class PajGPSData:
             self.positions = new_positions
         except ApiError as e:
             _LOGGER.error(f"Error while getting tracking data: {e.error}")
+            self.positions = []
         except Exception as e:
             _LOGGER.error(f"{e}")
+            self.positions = []
 
 
     async def update_alerts_data(self) -> None:
@@ -379,8 +389,10 @@ class PajGPSData:
                 asyncio.create_task(self.consume_alerts(alert_ids)) # Fire and forget to avoid blocking
         except ApiError as e:
             _LOGGER.error(f"Error while getting alerts data: {e.error}")
+            self.alerts = []
         except Exception as e:
             _LOGGER.error(f"{e}")
+            self.alerts = []
 
     async def update_devices_data(self) -> None:
         """
@@ -412,8 +424,10 @@ class PajGPSData:
             self.devices = new_devices
         except ApiError as e:
             _LOGGER.error(f"Error while getting devices data: {e.error}")
+            self.devices = []
         except Exception as e:
             _LOGGER.error(f"{e}")
+            self.devices = []
 
 
     async def consume_alerts(self, alert_ids: list[int]) -> None:
