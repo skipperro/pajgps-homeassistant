@@ -157,8 +157,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required('email', default=default_email): cv.string,
                 vol.Required('password', default=default_password): cv.string,
                 vol.Required('mark_alerts_as_read', default=default_mark_alerts_as_read): cv.boolean,
-                vol.Required('fetch_elevation', default=False): cv.boolean,
-                vol.Required('force_battery', default=False): cv.boolean,
+                vol.Required('fetch_elevation', default=default_fetch_elevation): cv.boolean,
+                vol.Required('force_battery', default=default_force_battery): cv.boolean,
             }
         )
         return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA, errors=errors)
