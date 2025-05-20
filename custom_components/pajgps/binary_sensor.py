@@ -99,8 +99,11 @@ async def async_setup_entry(
         _LOGGER.error("Email or password not set in config entry")
         return
 
+    fetch_elevation = config_entry.data.get("fetch_elevation", False)
+    force_battery = config_entry.data.get("force_battery", False)
+
     # Create main Paj GPS data object from pajgps_data.py
-    pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read)
+    pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
 
     # Update the data
     await pajgps_data.async_update()

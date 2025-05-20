@@ -201,7 +201,7 @@ class PajGPSElevationSensor(SensorEntity):
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
         self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_elevation"
         self._attr_name = f"{self._device_name} Elevation"
-        self._attr_icon = "mdi:mountain"
+        self._attr_icon = "mdi:map-marker-up"
 
     async def async_update(self) -> None:
         """Update the sensor state."""
@@ -274,8 +274,11 @@ async def async_setup_entry(
         _LOGGER.error("Email or password not set in config entry")
         return
 
+    fetch_elevation = config_entry.data.get("fetch_elevation", False)
+    force_battery = config_entry.data.get("force_battery", False)
+
     # Create main Paj GPS data object from pajgps_data.py
-    pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read)
+    pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
 
     # Update the data
     await pajgps_data.async_update()

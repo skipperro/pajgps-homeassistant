@@ -11,10 +11,12 @@
           "entry_name": "Entry name to identify the account in HA",
           "email": "E-Mail",
           "password": "Password",
-          "mark_alerts_as_read": "Mark alerts as read"
+          "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
+          "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
+          "force_battery": "Force creation of battery sensor for devices without battery defined in API"
         },
-        "description": "Add credentials for PAJ GPS Tracker (finder-portal.com).",
-        "title": "Authorization"
+        "description": "Set credentials for PAJ GPS account (finder-portal.com).",
+        "title": "PAJ GPS Configuration"
       }
     }
   },
@@ -30,10 +32,12 @@
           "entry_name": "Entry name to identify the account in HA",
           "email": "E-Mail",
           "password": "Password",
-          "mark_alerts_as_read": "Mark alerts as read"
+          "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
+          "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
+          "force_battery": "Force creation of battery sensor for devices without battery defined in API"
         },
-        "description": "Add credentials for PAJ GPS Tracker (finder-portal.com).",
-        "title": "Authorization"
+        "description": "Set credentials for PAJ GPS account (finder-portal.com).",
+        "title": "PAJ GPS Configuration"
       }
     }
   }

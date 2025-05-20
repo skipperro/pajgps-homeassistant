@@ -159,7 +159,7 @@ class PajGPSData:
     alerts: list[PajGPSAlert] = []
     positions: list[PajGPSPositionData] = []
 
-    def __init__(self, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool) -> None:
+    def __init__(self, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool, fetch_elevation: bool, force_battery: bool) -> None:
         """
         Initialize the PajGPSData class.
         """
@@ -169,14 +169,16 @@ class PajGPSData:
         self.email = email
         self.password = password
         self.mark_alerts_as_read = mark_alerts_as_read
+        self.fetch_elevation = fetch_elevation
+        self.force_battery = force_battery
 
     @classmethod
-    def get_instance(cls, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool) -> "PajGPSData":
+    def get_instance(cls, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool, fetch_elevation: bool, force_battery: bool) -> "PajGPSData":
         """
         Get or create a singleton instance of PajGPSData for the given entry_name.
         """
         if guid not in PajGPSDataInstances:
-            PajGPSDataInstances[guid] = cls(guid, entry_name, email, password, mark_alerts_as_read)
+            PajGPSDataInstances[guid] = cls(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
         return PajGPSDataInstances[guid]
 
     @classmethod

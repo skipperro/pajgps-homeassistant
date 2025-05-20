@@ -18,7 +18,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         password = os.getenv('PAJGPS_PASSWORD')
         entry_name = "test_entry"
         pajgps_data.PajGPSData.clean_instances()
-        self.data = pajgps_data.PajGPSData.get_instance("test-guid", entry_name, email, password, False)
+        self.data = pajgps_data.PajGPSData.get_instance("test-guid", entry_name, email, password, False, False, False)
 
 
     async def test_login(self):
@@ -88,8 +88,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         password_2 = "password_2"
 
         pajgps_data.PajGPSData.clean_instances()
-        data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name_1, email_1, password_1, False)
-        data_2 = pajgps_data.PajGPSData.get_instance("guid2", entry_name_2, email_2, password_2, False)
+        data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name_1, email_1, password_1, False, False, False)
+        data_2 = pajgps_data.PajGPSData.get_instance("guid2", entry_name_2, email_2, password_2, False, False, False)
         assert data_1 is not data_2
         assert data_1.guid != data_2.guid
         assert data_1.entry_name != data_2.entry_name
@@ -104,8 +104,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         email = "email@email.com"
         password = "password"
         pajgps_data.PajGPSData.clean_instances()
-        data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False)
-        data_2 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False)
+        data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False, False, False)
+        data_2 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False, False, False)
         assert data_1 is data_2
         assert data_1.guid == data_2.guid
         assert data_1.entry_name == data_2.entry_name
@@ -161,3 +161,18 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert self.data.alerts[0].alert_type == 2
             assert self.data.alerts[1].device_id == 2
             assert self.data.alerts[1].alert_type == 3
+
+    async def test_elevation(self):
+        """
+        Test the elevation data.
+        """
+        await self.data.refresh_token()
+        await self.data.async_update()
+        # Update the elevation data for the first device
+        device_id = self.data.get_device_ids()[0]
+        device = self.data.get_device(device_id)
+        assert device is not None
+        await self.data.update_elevation(device_id)
+        position = self.data.get_position(device_id)
+        assert position is not None
+        assert position.elevation is not None

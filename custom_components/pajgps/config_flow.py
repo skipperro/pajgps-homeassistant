@@ -23,6 +23,8 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Required('email', default=''): cv.string,
                 vol.Required('password', default=''): cv.string,
                 vol.Required('mark_alerts_as_read', default=True): cv.boolean,
+                vol.Required('fetch_elevation', default=False): cv.boolean,
+                vol.Required('force_battery', default=False): cv.boolean,
             }
         )
 
@@ -86,6 +88,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             default_mark_alerts_as_read = self.config_entry.data['mark_alerts_as_read']
         if 'mark_alerts_as_read' in self.config_entry.options:
             default_mark_alerts_as_read = self.config_entry.options['mark_alerts_as_read']
+        default_fetch_elevation = False
+        if 'fetch_elevation' in self.config_entry.data:
+            default_fetch_elevation = self.config_entry.data['fetch_elevation']
+        if 'fetch_elevation' in self.config_entry.options:
+            default_fetch_elevation = self.config_entry.options['fetch_elevation']
+        default_force_battery = False
+        if 'force_battery' in self.config_entry.data:
+            default_force_battery = self.config_entry.data['force_battery']
+        if 'force_battery' in self.config_entry.options:
+            default_force_battery = self.config_entry.options['force_battery']
 
         if user_input is not None:
             # If email is null or empty string, add error
@@ -102,6 +114,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     'email': user_input['email'],
                     'password': user_input['password'],
                     'mark_alerts_as_read': user_input['mark_alerts_as_read'],
+                    'fetch_elevation': user_input['fetch_elevation'],
+                    'force_battery': user_input['force_battery'],
                 }
 
                 # Get existing instance of PajGPSData
@@ -110,7 +124,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     self.config_entry.data['entry_name'],
                     self.config_entry.data['email'],
                     self.config_entry.data['password'],
-                    self.config_entry.data['mark_alerts_as_read']
+                    self.config_entry.data['mark_alerts_as_read'],
+                    self.config_entry.data['fetch_elevation'],
+                    self.config_entry.data['force_battery'],
                 )
                 paj_data.entry_name = new_data['entry_name']
                 paj_data.email = new_data['email']
@@ -139,6 +155,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required('email', default=default_email): cv.string,
                 vol.Required('password', default=default_password): cv.string,
                 vol.Required('mark_alerts_as_read', default=default_mark_alerts_as_read): cv.boolean,
+                vol.Required('fetch_elevation', default=False): cv.boolean,
+                vol.Required('force_battery', default=False): cv.boolean,
             }
         )
         return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA, errors=errors)
