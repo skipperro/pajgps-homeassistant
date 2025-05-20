@@ -185,6 +185,75 @@ class PajGPSSpeedSensor(SensorEntity):
     def native_unit_of_measurement(self) -> str | None:
         return "km/h"
 
+class PajGPSElevationSensor(SensorEntity):
+    """
+    Representation of a Paj GPS elevation sensor.
+    Takes the data from base PajGPSData object created in async_setup_entry.
+    """
+    _pajgps_data = None
+    _device_id = None
+    _elevation: float | None = None
+
+    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
+        """Initialize the sensor."""
+        self._pajgps_data = pajgps_data
+        self._device_id = device_id
+        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_elevation"
+        self._attr_name = f"{self._device_name} Elevation"
+        self._attr_icon = "mdi:mountain"
+
+    async def async_update(self) -> None:
+        """Update the sensor state."""
+        try:
+            await self._pajgps_data.async_update()
+            position_data = self._pajgps_data.get_position(self._device_id)
+            if position_data is not None:
+                if position_data.elevation is not None:
+                    self._elevation = position_data.elevation
+                else:
+                    self._elevation = None
+        except Exception as e:
+            _LOGGER.error("Error updating elevation sensor: %s", e)
+            self._elevation = None
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return the device info."""
+        if self._pajgps_data is None:
+            return None
+        return self._pajgps_data.get_device_info(self._device_id)
+
+    @property
+    def should_poll(self) -> bool:
+        return True
+
+    @property
+    def device_class(self) -> SensorDeviceClass | str | None:
+        return SensorDeviceClass.DISTANCE
+
+    @property
+    def state_class(self) -> SensorStateClass | str | None:
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> float | None:
+        if self._elevation is not None:
+            new_value = float(self._elevation)
+            # Make sure value is between 0 and 10000
+            if new_value < 0.0:
+                new_value = 0.0
+            elif new_value > 10000.0:
+                new_value = 10000.0
+            return new_value
+        else:
+            return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return "m"
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: config_entries.ConfigEntry,
@@ -217,10 +286,14 @@ async def async_setup_entry(
         _LOGGER.debug("Devices found: %s", devices)
         entities = []
         for device_id in devices:
+            entities.append(PajGPSSpeedSensor(pajgps_data, device_id))
             # Check if this device model supports battery
             if pajgps_data.get_device(device_id).has_battery or pajgps_data.force_battery:
                 entities.append(PajGPSBatterySensor(pajgps_data, device_id))
-            entities.append(PajGPSSpeedSensor(pajgps_data, device_id))
+            # Check if user wants to get elevation
+            if pajgps_data.fetch_elevation:
+                entities.append(PajGPSElevationSensor(pajgps_data, device_id))
+
         if entities and async_add_entities:
             async_add_entities(entities, update_before_add=True)
     else:

@@ -15,9 +15,8 @@ from custom_components.pajgps.const import DOMAIN, VERSION, ALERT_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-REQUEST_TIMEOUT = int(SCAN_INTERVAL.total_seconds() / 2)
+REQUEST_TIMEOUT = 5# 5 seconds x 3 requests per update = 24 seconds (must stay below SCAN_INTERVAL)
 API_URL = "https://connect.paj-gps.de/api/v1/"
-
 
 
 class PajGPSDevice:
@@ -94,14 +93,18 @@ class PajGPSPositionData:
     device_id: int
     lat: float
     lng: float
+    elevation: float | None = None
+    direction: int
     speed: int
     battery: int
+    last_elevation_update: float = 0.0
 
-    def __init__(self, device_id: int, lat: float, lng: float, speed: int, battery: int) -> None:
+    def __init__(self, device_id: int, lat: float, lng: float, direction:int, speed: int, battery: int) -> None:
         """Initialize the PajGPSTracking class."""
         self.device_id = device_id
         self.lat = lat
         self.lng = lng
+        self.direction = direction
         self.speed = speed
         self.battery = battery
 
@@ -144,6 +147,7 @@ class PajGPSData:
     mark_alerts_as_read: bool = True
     update_lock = asyncio.Lock()
     force_battery = True
+    fetch_elevation = True
 
     # Pure json responses from API
     devices_json: str
@@ -159,6 +163,7 @@ class PajGPSData:
         """
         Initialize the PajGPSData class.
         """
+
         self.guid = guid
         self.entry_name = entry_name
         self.email = email
@@ -253,7 +258,7 @@ class PajGPSData:
             _LOGGER.error(f"Error while getting login token: {e.error}")
             return None
         except Exception as e:
-            _LOGGER.error(f"{e}")
+            _LOGGER.error(f"Error while getting login token: {e}")
             return None
 
     async def refresh_token(self, forced: bool = False) -> None:
@@ -385,17 +390,63 @@ class PajGPSData:
                     device["iddevice"],
                     device["lat"],
                     device["lng"],
+                    device["direction"],
                     device["speed"],
                     device["battery"]
                 ) for device in json["success"]
             ]
+            if self.fetch_elevation:
+                # Get new positions that have lat and lng different from old positions for same device
+                moved_device_ids = []
+                for new_position in new_positions:
+                    old_position = self.get_position(new_position.device_id)
+                    if old_position is not None:
+                        if (old_position.lat != new_position.lat) or (old_position.lng != new_position.lng) or new_position.elevation is None:
+                            moved_device_ids.append(new_position.device_id)
+
+                # Update elevation for moved devices in background
+                for device_id in moved_device_ids:
+                    # Check if there was an update in the last 5 minutes
+                    if time.time() - self.get_position(device_id).last_elevation_update > 60 * 5:
+                        asyncio.create_task(self.update_elevation(device_id))
+                        self.get_position(device_id).last_elevation_update = time.time()
+
             self.positions = new_positions
         except ApiError as e:
             _LOGGER.error(f"Error while getting tracking data: {e.error}")
             self.positions = []
         except Exception as e:
-            _LOGGER.error(f"{e}")
+            _LOGGER.error(f"Error updating position data: {e}")
             self.positions = []
+
+    async def update_elevation(self, device_id: int) -> None:
+        """
+        Determine the elevation of the device using the Open Meteo API.
+        Example request:
+        https://api.open-meteo.com/v1/elevation?latitude=52.52&longitude=13.41
+        Example JSON response:
+        {"elevation":[38.0]}
+        """
+        url = "https://api.open-meteo.com/v1/elevation"
+        headers = {
+            'accept': 'application/json'
+        }
+        position = self.get_position(device_id)
+        if position is None:
+            return
+        params = {
+            'latitude': position.lat,
+            'longitude': position.lng
+        }
+        try:
+            json = await self.make_get_request(url, headers, params=params)
+            if "elevation" in json:
+                position.elevation = json["elevation"][0]
+            else:
+                _LOGGER.error(f"Error while getting elevation data: {json}")
+        except Exception as e:
+            _LOGGER.error(f"Error while getting elevation data: {e}")
+            position.elevation = None
 
 
     async def update_alerts_data(self) -> None:
@@ -427,7 +478,7 @@ class PajGPSData:
             _LOGGER.error(f"Error while getting alerts data: {e.error}")
             self.alerts = []
         except Exception as e:
-            _LOGGER.error(f"{e}")
+            _LOGGER.error(f"Error updating alerts: {e}")
             self.alerts = []
 
     async def update_devices_data(self) -> None:
@@ -472,7 +523,7 @@ class PajGPSData:
             _LOGGER.error(f"Error while getting devices data: {e.error}")
             self.devices = []
         except Exception as e:
-            _LOGGER.error(f"{e}")
+            _LOGGER.error(f"Error while updating Paj GPS devices: {e}")
             self.devices = []
 
 
@@ -496,7 +547,7 @@ class PajGPSData:
             except ApiError as e:
                 _LOGGER.error(f"Error while marking alert {alert_id} as read: {e.error}")
             except Exception as e:
-                _LOGGER.error(f"{e}")
+                _LOGGER.error(f"Error while marking alerts as read: {e}")
 
     async def change_alert_state(self, device_id: int, alert_type: int, state: bool) -> None:
         """
@@ -563,4 +614,4 @@ class PajGPSData:
         except ApiError as e:
             _LOGGER.error(f"Error while changing alert state: {e.error}")
         except Exception as e:
-            _LOGGER.error(f"{e}")
+            _LOGGER.error(f"Error while changing alert state: {e}")
