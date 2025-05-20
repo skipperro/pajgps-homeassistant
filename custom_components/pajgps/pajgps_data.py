@@ -52,6 +52,31 @@ class PajGPSDevice:
         """Initialize the PajGPSDevice class."""
         self.id = id
 
+    def is_alert_enabled(self, _alert_type) -> bool:
+        """
+        Check if the alert is available and enabled for the device.
+        """
+        if _alert_type == 1:                 # Shock Alert
+            return self.has_alarm_shock and self.alarm_shock_enabled
+        elif _alert_type == 2:               # Battery Alert
+            return self.has_alarm_battery and self.alarm_battery_enabled
+        elif _alert_type == 4:               # SOS Alert
+            return self.has_alarm_sos and self.alarm_sos_enabled
+        elif _alert_type == 5:               # Speed Alert
+            return self.has_alarm_speed and self.alarm_speed_enabled
+        elif _alert_type == 6:               # Power Cutoff Alert
+            return self.has_alarm_power_cutoff and self.alarm_power_cutoff_enabled
+        elif _alert_type == 7:               # Ignition Alert
+            return self.has_alarm_ignition and self.alarm_ignition_enabled
+        elif _alert_type == 9:               # Drop Alert
+            return self.has_alarm_drop and self.alarm_drop_enabled
+        elif _alert_type == 13:              # Voltage Alert
+            return self.has_alarm_voltage and self.alarm_voltage_enabled
+        else:
+            _LOGGER.error(f"Unknown alert type: {_alert_type}")
+            return False
+
+
 class PajGPSAlert:
     """Representation of single Paj GPS notification/alert."""
 
@@ -118,6 +143,7 @@ class PajGPSData:
     data_ttl: int = int(SCAN_INTERVAL.total_seconds() / 2)  # update requests done more often than this many seconds will be ignored
     mark_alerts_as_read: bool = True
     update_lock = asyncio.Lock()
+    force_battery = True
 
     # Pure json responses from API
     devices_json: str

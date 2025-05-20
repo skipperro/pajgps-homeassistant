@@ -5,9 +5,10 @@ and updating their state based on the data received from the Paj GPS API.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
+from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
 from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
@@ -19,15 +20,16 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
 
-class PajGPSAlertSensor(BinarySensorEntity):
+class PajGPSAlertSwitch(SwitchEntity):
     """
-    Representation of a Paj GPS alert sensor.
+    Representation of a Paj GPS alert switch.
+    Can be used to enable or disable alerts for a specific device.
     Takes the data from base PajGPSData object created in async_setup_entry.
     """
     _pajgps_data = None
     _device_id = None
     _alert_type: int = 0
-    _state: bool = False
+    _state: bool | None = False
 
     def __init__(self, pajgps_data: PajGPSData, device_id: int, alert_type) -> None:
         """Initialize the sensor."""
@@ -36,27 +38,19 @@ class PajGPSAlertSensor(BinarySensorEntity):
         self._alert_type = alert_type
         alert_name = ALERT_NAMES.get(alert_type, "Unknown Alert")
         self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_alert_{self._alert_type}"
-        self._attr_name = f"{self._device_name} {alert_name}"
-        self._attr_icon = "mdi:bell"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_switch_{self._alert_type}"
+        self._attr_name = f"{self._device_name} {alert_name} Switch"
+        self._attr_icon = "mdi:bell-cog"
 
     async def async_update(self) -> None:
         """Update the sensor state."""
         await self._pajgps_data.async_update()
-        alerts = self._pajgps_data.get_alerts(self._device_id)
-        self._state = False
-        if alerts is not None:
-            for alert in alerts:
-                if alert.device_id == self._device_id and alert.alert_type == self._alert_type:
-                    self._state = True
-                    break
-
-    @property
-    def icon(self) -> str | None:
-        """Return the icon of the sensor."""
-        if self._state:
-            return "mdi:bell-alert"
-        return "mdi:bell"
+        device = self._pajgps_data.get_device(self._device_id)
+        if device is None:
+            self._state = None
+            _LOGGER.error("Device not found: %s", self._device_id)
+            return
+        self._state = device.is_alert_enabled(self._alert_type)
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -70,14 +64,38 @@ class PajGPSAlertSensor(BinarySensorEntity):
         return True
 
     @property
-    def device_class(self) -> BinarySensorDeviceClass | str | None:
-        return BinarySensorDeviceClass.PROBLEM
+    def device_class(self) -> SwitchDeviceClass | str | None:
+        return SwitchDeviceClass.SWITCH
 
     @property
-    def is_on(self) -> bool | None:
-        """Return if the binary sensor is on."""
-        # This needs to enumerate to true or false
+    def is_on(self) -> bool:
+        """Return true if the switch is on."""
         return self._state
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Turn the switch on."""
+        if self._pajgps_data is None:
+            _LOGGER.error("PajGPS data not available")
+            return
+        self._state = True
+        await self.async_update_ha_state()
+        # Fire and forget change_alert_state()
+        asyncio.create_task(
+            self._pajgps_data.change_alert_state(self._device_id, self._alert_type, True)
+        )
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Turn the switch off."""
+        if self._pajgps_data is None:
+            _LOGGER.error("PajGPS data not available")
+            return
+        self._state = False
+        await self.async_update_ha_state()
+        # Fire and forget change_alert_state()
+        asyncio.create_task(
+            self._pajgps_data.change_alert_state(self._device_id, self._alert_type, False)
+        )
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -105,7 +123,7 @@ async def async_setup_entry(
     # Update the data
     await pajgps_data.async_update()
 
-    # Add the Paj GPS alert sensors to the entity registry
+    # Add the Paj GPS alert switches to the entity registry
     devices = pajgps_data.get_device_ids()
     if devices is not None:
         _LOGGER.debug("Devices found: %s", devices)
@@ -114,24 +132,23 @@ async def async_setup_entry(
             device = pajgps_data.get_device(device_id)
             if device is not None:
                 if device.has_alarm_shock:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 1))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 1))
                 if device.has_alarm_battery:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 2))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 2))
                 if device.has_alarm_sos:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 4))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 4))
                 if device.has_alarm_speed:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 5))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 5))
                 if device.has_alarm_power_cutoff:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 6))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 6))
                 if device.has_alarm_ignition:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 7))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 7))
                 if device.has_alarm_drop:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 9))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 9))
                 if device.has_alarm_voltage:
-                    entities.append(PajGPSAlertSensor(pajgps_data, device_id, 13))
+                    entities.append(PajGPSAlertSwitch(pajgps_data, device_id, 13))
 
         if entities and async_add_entities:
             async_add_entities(entities, update_before_add=True)
     else:
         _LOGGER.error("No devices found for entry: %s", entry_name)
-

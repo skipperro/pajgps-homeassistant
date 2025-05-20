@@ -211,14 +211,14 @@ async def async_setup_entry(
     # Update the data
     await pajgps_data.async_update()
 
-    # Add the Paj GPS position sensors to the entity registry
+    # Add the Paj GPS sensors to the entity registry
     devices = pajgps_data.get_device_ids()
     if devices is not None:
         _LOGGER.debug("Devices found: %s", devices)
         entities = []
         for device_id in devices:
             # Check if this device model supports battery
-            if pajgps_data.get_device(device_id).has_battery:
+            if pajgps_data.get_device(device_id).has_battery or pajgps_data.force_battery:
                 entities.append(PajGPSBatterySensor(pajgps_data, device_id))
             entities.append(PajGPSSpeedSensor(pajgps_data, device_id))
         if entities and async_add_entities:
