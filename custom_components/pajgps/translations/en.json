@@ -27,7 +27,7 @@
       "password_required": "Please enter your password."
     },
     "step": {
-      "user": {
+      "init": {
         "data": {
           "entry_name": "Entry name to identify the account in HA",
           "email": "E-Mail",
