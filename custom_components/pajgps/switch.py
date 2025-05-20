@@ -78,11 +78,7 @@ class PajGPSAlertSwitch(SwitchEntity):
             _LOGGER.error("PajGPS data not available")
             return
         self._state = True
-        await self.async_update_ha_state()
-        # Fire and forget change_alert_state()
-        asyncio.create_task(
-            self._pajgps_data.change_alert_state(self._device_id, self._alert_type, True)
-        )
+        await self._pajgps_data.change_alert_state(self._device_id, self._alert_type, True)
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
@@ -90,11 +86,7 @@ class PajGPSAlertSwitch(SwitchEntity):
             _LOGGER.error("PajGPS data not available")
             return
         self._state = False
-        await self.async_update_ha_state()
-        # Fire and forget change_alert_state()
-        asyncio.create_task(
-            self._pajgps_data.change_alert_state(self._device_id, self._alert_type, False)
-        )
+        await self._pajgps_data.change_alert_state(self._device_id, self._alert_type, False)
 
 
 async def async_setup_entry(

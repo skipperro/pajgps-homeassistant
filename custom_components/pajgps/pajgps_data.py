@@ -510,26 +510,55 @@ class PajGPSData:
               "alarmsos": 1
             }'
         """
+        state_int = 1 if state else 0
         alert_name: str = ""
+        device = self.get_device(device_id)
+        
         if alert_type == 1:                 # Shock Alert
             alert_name = "alarmbewegung"
+            device.alarm_shock_enabled = state
+        elif alert_type == 2:               # Battery Alert
+            alert_name = "alarmakkuwarnung"
+            device.alarm_battery_enabled = state
         elif alert_type == 4:               # SOS Alert
             alert_name = "alarmsos"
+            device.alarm_sos_enabled = state
+        elif alert_type == 5:               # Speed Alert
+            alert_name = "alarmgeschwindigkeit"
+            device.alarm_speed_enabled = state
+        elif alert_type == 6:               # Power Cutoff Alert
+            alert_name = "alarmstromunterbrechung"
+            device.alarm_power_cutoff_enabled = state
+        elif alert_type == 7:               # Ignition Alert
+            alert_name = "alarmzuendalarm"
+            device.alarm_ignition_enabled = state
+        elif alert_type == 9:               # Drop Alert
+            alert_name = "alarm_fall"
+            device.alarm_drop_enabled = state
         elif alert_type == 13:              # Voltage Alert
             alert_name = "alarm_volt"
+            device.alarm_voltage_enabled = state
+
         else:
             _LOGGER.error(f"Unknown alert type: {alert_type}")
             return
 
-        state_int = 1 if state else 0
+
+
+        # Change the alert state in PajGPSData
+        device = self.get_device(device_id)
+        if device is None:
+            _LOGGER.error(f"Device not found: {device_id}")
+            return
+
 
         url = API_URL + "device/" + str(device_id)
         headers = self.get_standard_headers()
-        payload = {
+        params = {
             alert_name: state_int
         }
         try:
-            await self.make_put_request(url, headers, payload=payload)
+            await self.make_put_request(url, headers, params=params)
             _LOGGER.debug(f"Alert {alert_name} for device {device_id} set to {state_int}.")
         except ApiError as e:
             _LOGGER.error(f"Error while changing alert state: {e.error}")
