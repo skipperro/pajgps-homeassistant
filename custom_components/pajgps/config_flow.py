@@ -132,6 +132,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 paj_data.email = new_data['email']
                 paj_data.password = new_data['password']
                 paj_data.mark_alerts_as_read = new_data['mark_alerts_as_read']
+                paj_data.fetch_elevation = new_data['fetch_elevation']
+                paj_data.force_battery = new_data['force_battery']
 
                 self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
