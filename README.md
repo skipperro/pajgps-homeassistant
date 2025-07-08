@@ -17,6 +17,8 @@ This integration enables you to effortlessly incorporate PAJ GPS devices from ww
 - [x] Device tracking (Longitude, Latitude)
 - [x] Device battery level
 - [x] Device speed
+- [x] Device direction/heading
+- [x] GPS accuracy
 
 ## Planned features
 - [ ] Device status (moving, stopped, etc.)

@@ -54,3 +54,35 @@ class PajGpsTrackerTest(unittest.IsolatedAsyncioTestCase):
         for device in devices:
             device_data = await tracker.get_device_data(token, device)
             assert device_data != None
+
+    def test_sensor_classes(self):
+        """Test that all sensor classes can be instantiated."""
+        # Create a mock GPS sensor with test data
+        class MockGpsSensor:
+            _gps_id = "test123"
+            
+            def battery_level(self):
+                return 80
+                
+            def speed(self):
+                return 50
+                
+            def direction(self):
+                return 180
+                
+            def accuracy(self):
+                return 5
+        
+        mock_sensor = MockGpsSensor()
+        
+        # Test all sensor classes can be instantiated
+        battery_sensor = tracker.PajGpsBatterySensor(mock_sensor)
+        speed_sensor = tracker.PajGpsSpeedSensor(mock_sensor)
+        direction_sensor = tracker.PajGpsDirectionSensor(mock_sensor)
+        accuracy_sensor = tracker.PajGpsAccuracySensor(mock_sensor)
+        
+        # Basic verification
+        assert battery_sensor._attr_name == "PAJ GPS test123 Battery Level"
+        assert speed_sensor._attr_name == "PAJ GPS test123 Speed"
+        assert direction_sensor._attr_name == "PAJ GPS test123 Direction"
+        assert accuracy_sensor._attr_name == "PAJ GPS test123 Accuracy"

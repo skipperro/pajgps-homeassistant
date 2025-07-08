@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import timedelta
+from threading import Lock
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
@@ -74,6 +75,9 @@ class PajGpsTrackerData:
     speed = None
     iddevice = None
     accuracy = None
+    
+    # Store all additional fields that might be in the API response
+    additional_data = None
 
     def __init__(self, json):
         self.lat = json["lat"]
@@ -83,9 +87,17 @@ class PajGpsTrackerData:
         self.speed = json["speed"]
         self.iddevice = json["iddevice"]
         self.accuracy = json["accuracy"]
+        
+        # Capture any additional fields not explicitly handled
+        known_fields = {"lat", "lng", "direction", "battery", "speed", "iddevice", "accuracy"}
+        self.additional_data = {k: v for k, v in json.items() if k not in known_fields}
 
     def __str__(self):
-        return f"lat: {self.lat}, lng: {self.lng}, direction: {self.direction}, battery: {self.battery}, speed: {self.speed}, iddevice: {self.iddevice}"
+        base_str = f"lat: {self.lat}, lng: {self.lng}, direction: {self.direction}, battery: {self.battery}, speed: {self.speed}, iddevice: {self.iddevice}, accuracy: {self.accuracy}"
+        if self.additional_data:
+            additional_str = ", ".join([f"{k}: {v}" for k, v in self.additional_data.items()])
+            return f"{base_str}, additional: {{{additional_str}}}"
+        return base_str
 
 # Battery sensor reading data from GPS sensor battery_level attribute
 class PajGpsBatterySensor(SensorEntity):
@@ -204,6 +216,84 @@ class PajGpsSpeedSensor(SensorEntity):
         return True
 
 
+# Direction sensor reading data from GPS sensor direction attribute
+class PajGpsDirectionSensor(SensorEntity):
+
+    gpssensor: PajGpsSensor = None
+    def __init__(self, gpssensor: PajGpsSensor):
+        self.gpssensor = gpssensor
+        self._attr_icon = "mdi:compass"
+        self._attr_name = f"PAJ GPS {self.gpssensor._gps_id} Direction"
+        self._attr_unique_id = f'pajgps_{self.gpssensor._gps_id}_direction'
+        self._attr_extra_state_attributes = {}
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return the device info."""
+        return {
+            "identifiers": {(DOMAIN, self.gpssensor._gps_id)},
+        }
+
+    @property
+    def native_value (self) -> int | None:
+        if self.gpssensor.direction is not None:
+            new_value = int(self.gpssensor.direction)
+            # Make sure value is between 0 and 360 degrees
+            if new_value < 0:
+                new_value = 0
+            elif new_value > 360:
+                new_value = 360
+            return new_value
+        else:
+            return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return "°"
+
+    @property
+    def should_poll(self) -> bool:
+        return True
+
+
+# Accuracy sensor reading data from GPS sensor accuracy attribute
+class PajGpsAccuracySensor(SensorEntity):
+
+    gpssensor: PajGpsSensor = None
+    def __init__(self, gpssensor: PajGpsSensor):
+        self.gpssensor = gpssensor
+        self._attr_icon = "mdi:crosshairs-gps"
+        self._attr_name = f"PAJ GPS {self.gpssensor._gps_id} Accuracy"
+        self._attr_unique_id = f'pajgps_{self.gpssensor._gps_id}_accuracy'
+        self._attr_extra_state_attributes = {}
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return the device info."""
+        return {
+            "identifiers": {(DOMAIN, self.gpssensor._gps_id)},
+        }
+
+    @property
+    def native_value (self) -> int | None:
+        if self.gpssensor.accuracy is not None:
+            new_value = int(self.gpssensor.accuracy)
+            # Make sure value is not negative
+            if new_value < 0:
+                new_value = 0
+            return new_value
+        else:
+            return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return "m"
+
+    @property
+    def should_poll(self) -> bool:
+        return True
+
+
 # Define a GPS tracker sensor/device class for Home Assistant
 class PajGpsSensor(TrackerEntity):
 
@@ -278,6 +368,24 @@ class PajGpsSensor(TrackerEntity):
         else:
             return None
 
+    @property
+    def direction(self) -> int | None:
+        """Return the direction/heading of the device."""
+        # If _last_data is not None, return direction from _last_data. Else return None.
+        if self._last_data is not None:
+            return self._last_data.direction
+        else:
+            return None
+
+    @property
+    def accuracy(self) -> int | None:
+        """Return the GPS accuracy of the device."""
+        # If _last_data is not None, return accuracy from _last_data. Else return None.
+        if self._last_data is not None:
+            return self._last_data.accuracy
+        else:
+            return None
+
     async def refresh_token(self):
         global TOKEN, LAST_TOKEN_REFRESH, TOKEN_REFRESH_LOCK
 
@@ -313,6 +421,11 @@ class PajGpsSensor(TrackerEntity):
                 self._last_data = tracker_data
                 # Add extra attribute with raw data as string
                 self._attr_extra_state_attributes["raw_data"] = str(tracker_data)
+                
+                # Add any additional data fields as separate attributes
+                if tracker_data.additional_data:
+                    for key, value in tracker_data.additional_data.items():
+                        self._attr_extra_state_attributes[f"additional_{key}"] = value
 
         except Exception as e:
             _LOGGER.error(f'{e}')
@@ -491,6 +604,12 @@ async def async_setup_entry(
 
             # Add speed sensor
             to_add.append(PajGpsSpeedSensor(gpssensor))
+
+            # Add direction sensor  
+            to_add.append(PajGpsDirectionSensor(gpssensor))
+
+            # Add accuracy sensor
+            to_add.append(PajGpsAccuracySensor(gpssensor))
         except Exception as e:
             _LOGGER.error(f"Error creating entities for device {device_id}: {e}")
             continue
