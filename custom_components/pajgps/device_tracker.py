@@ -212,6 +212,10 @@ class PajGpsSpeedSensor(SensorEntity):
         return "km/h"
 
     @property
+    def state_class(self) -> SensorStateClass | str | None:
+        return SensorStateClass.MEASUREMENT
+
+    @property
     def should_poll(self) -> bool:
         return True
 
@@ -252,6 +256,10 @@ class PajGpsDirectionSensor(SensorEntity):
         return "°"
 
     @property
+    def state_class(self) -> SensorStateClass | str | None:
+        return SensorStateClass.MEASUREMENT
+
+    @property
     def should_poll(self) -> bool:
         return True
 
@@ -288,6 +296,10 @@ class PajGpsAccuracySensor(SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         return "m"
+
+    @property
+    def state_class(self) -> SensorStateClass | str | None:
+        return SensorStateClass.MEASUREMENT
 
     @property
     def should_poll(self) -> bool:
