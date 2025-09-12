@@ -17,11 +17,12 @@ This integration enables you to effortlessly incorporate PAJ GPS devices from ww
 - [x] Device tracking (Longitude, Latitude)
 - [x] Device battery level
 - [x] Device speed
+- [x] Notifications (SOS, low battery, etc.)
+- [x] Elevation
+- [x] Support for multiple accounts
 
 ## Planned features
 - [ ] Device status (moving, stopped, etc.)
-- [ ] Device altitude
-- [ ] Notifications (SOS, low battery, etc.)
 - [ ] Geofencing
 
 ## Supported devices
