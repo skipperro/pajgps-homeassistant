@@ -15,7 +15,7 @@ from custom_components.pajgps.const import DOMAIN, VERSION, ALERT_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-REQUEST_TIMEOUT = 5# 5 seconds x 3 requests per update = 24 seconds (must stay below SCAN_INTERVAL)
+REQUEST_TIMEOUT = 5  # 5 seconds x 3 requests per update = 24 seconds (must stay below SCAN_INTERVAL)
 API_URL = "https://connect.paj-gps.de/api/v1/"
 
 
