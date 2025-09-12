@@ -198,7 +198,10 @@ class PajGPSData:
                     return await response.json()
                 else:
                     json = await response.json()
-                    raise ApiError(json)
+                    if json.get("error"):
+                        raise ApiError(json)
+
+
         # Close the session
         await session.close()
 
@@ -422,7 +425,7 @@ class PajGPSData:
             _LOGGER.error(f"Error while getting tracking data: {e.error}")
             self.positions = []
         except TimeoutError as e:
-            _LOGGER.error("Timeout while getting tracking data.")
+            _LOGGER.warning("Timeout while getting tracking data.")
         except Exception as e:
             _LOGGER.error(f"Error updating position data: {e}")
             self.positions = []
@@ -442,6 +445,9 @@ class PajGPSData:
         position = self.get_position(device_id)
         if position is None:
             return
+        # Round the latitude and longitude to about 100 meters precision
+        position.lat = round(position.lat, 5)
+        position.lng = round(position.lng, 5)
         params = {
             'latitude': position.lat,
             'longitude': position.lng
@@ -453,7 +459,7 @@ class PajGPSData:
             else:
                 _LOGGER.error(f"Error while getting elevation data: {json}")
         except TimeoutError as e:
-            _LOGGER.error("Timeout while getting elevation data.")
+            _LOGGER.warning("Timeout while getting elevation data.")
         except Exception as e:
             _LOGGER.error(f"Error while getting elevation data: {e}")
             position.elevation = None
@@ -488,7 +494,7 @@ class PajGPSData:
             _LOGGER.error(f"Error while getting alerts data: {e.error}")
             self.alerts = []
         except TimeoutError as e:
-            _LOGGER.error("Timeout while getting alerts data.")
+            _LOGGER.warning("Timeout while getting alerts data.")
         except Exception as e:
             _LOGGER.error(f"Error updating alerts: {e}")
             self.alerts = []
@@ -535,7 +541,7 @@ class PajGPSData:
             _LOGGER.error(f"Error while getting devices data: {e.error}")
             self.devices = []
         except TimeoutError as e:
-            _LOGGER.error("Timeout while getting devices data.")
+            _LOGGER.warning("Timeout while getting devices data.")
         except Exception as e:
             _LOGGER.error(f"Error while updating Paj GPS devices: {e}")
             self.devices = []
@@ -561,7 +567,7 @@ class PajGPSData:
             except ApiError as e:
                 _LOGGER.error(f"Error while marking alert {alert_id} as read: {e.error}")
             except TimeoutError as e:
-                _LOGGER.error("Timeout while marking alerts as read.")
+                _LOGGER.warning("Timeout while marking alerts as read.")
             except Exception as e:
                 _LOGGER.error(f"Error while marking alerts as read: {e}")
 
@@ -627,6 +633,6 @@ class PajGPSData:
         except ApiError as e:
             _LOGGER.error(f"Error while changing alert state: {e.error}")
         except TimeoutError as e:
-            _LOGGER.error("Timeout while changing alert state.")
+            _LOGGER.warning("Timeout while changing alert state.")
         except Exception as e:
             _LOGGER.error(f"Error while changing alert state: {e}")
