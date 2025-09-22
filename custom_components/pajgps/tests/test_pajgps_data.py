@@ -162,6 +162,113 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert self.data.alerts[1].device_id == 2
             assert self.data.alerts[1].alert_type == 3
 
+    async def test_voltage_parsing(self):
+        """
+        Test the voltage parsing from position data.
+        """
+        # Mock the make_post_request to test voltage parsing from position data
+        mock_position_data = {
+            "success": [
+                {
+                    "id": "test_id_1",
+                    "lat": 48.87249333333333,
+                    "lng": 12.58305,
+                    "direction": 0,
+                    "speed": 0,
+                    "battery": 95,
+                    "iddevice": 1,
+                    "volt": 12.5  # voltage in volts
+                },
+                {
+                    "id": "test_id_2", 
+                    "lat": 49.02280833333333,
+                    "lng": 12.65645,
+                    "direction": 265,
+                    "speed": 5,
+                    "battery": 80,
+                    "iddevice": 2,
+                    "volt": 3800  # voltage in millivolts, should be converted to 3.8V
+                },
+                {
+                    "id": "test_id_3",
+                    "lat": 50.12345,
+                    "lng": 13.56789,
+                    "direction": 180,
+                    "speed": 10,
+                    "battery": 60,
+                    "iddevice": 3
+                    # No volt field - should result in None
+                }
+            ]
+        }
+        
+        with patch.object(self.data, 'make_post_request', new=AsyncMock(return_value=mock_position_data)):
+            await self.data.update_position_data()
+            
+            # Check that positions were created correctly
+            assert self.data.positions is not None
+            assert len(self.data.positions) == 3
+            
+            # Test device 1 - voltage in volts (12.5V)
+            position1 = next((p for p in self.data.positions if p.device_id == 1), None)
+            assert position1 is not None
+            assert position1.voltage == 12.5
+            
+            # Test device 2 - voltage in millivolts converted to volts (3800mV -> 3.8V)
+            position2 = next((p for p in self.data.positions if p.device_id == 2), None)
+            assert position2 is not None
+            assert position2.voltage == 3.8
+            
+            # Test device 3 - no voltage field
+            position3 = next((p for p in self.data.positions if p.device_id == 3), None)
+            assert position3 is not None
+            assert position3.voltage is None
+
+    async def test_voltage_parsing_invalid_values(self):
+        """
+        Test voltage parsing with invalid values.
+        """
+        mock_position_data = {
+            "success": [
+                {
+                    "id": "test_id_1",
+                    "lat": 48.87249333333333,
+                    "lng": 12.58305,
+                    "direction": 0,
+                    "speed": 0,
+                    "battery": 95,
+                    "iddevice": 1,
+                    "volt": "invalid"  # Invalid string value
+                },
+                {
+                    "id": "test_id_2",
+                    "lat": 49.02280833333333,
+                    "lng": 12.65645,
+                    "direction": 265,
+                    "speed": 5,
+                    "battery": 80,
+                    "iddevice": 2,
+                    "volt": None  # None value
+                }
+            ]
+        }
+        
+        with patch.object(self.data, 'make_post_request', new=AsyncMock(return_value=mock_position_data)):
+            await self.data.update_position_data()
+            
+            # Check that positions were created correctly even with invalid voltage values
+            assert self.data.positions is not None
+            assert len(self.data.positions) == 2
+            
+            # Both should have voltage as None due to invalid values
+            position1 = next((p for p in self.data.positions if p.device_id == 1), None)
+            assert position1 is not None
+            assert position1.voltage is None
+            
+            position2 = next((p for p in self.data.positions if p.device_id == 2), None)
+            assert position2 is not None
+            assert position2.voltage is None
+
     async def test_elevation(self):
         """
         Test the elevation data.

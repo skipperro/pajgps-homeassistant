@@ -276,9 +276,9 @@ class PajGPSVoltageSensor(SensorEntity):
         """Update the sensor state."""
         try:
             await self._pajgps_data.async_update()
-            device = self._pajgps_data.get_device(self._device_id)
-            if device is not None:
-                self._voltage = device.voltage
+            position_data = self._pajgps_data.get_position(self._device_id)
+            if position_data is not None:
+                self._voltage = position_data.voltage
             else:
                 self._voltage = None
         except Exception as e:

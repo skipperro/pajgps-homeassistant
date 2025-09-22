@@ -28,7 +28,6 @@ class PajGPSDevice:
     imei: str
     model: str
     has_battery: bool
-    voltage: float | None = None
 
     # Alarms
     has_alarm_sos: bool
@@ -98,9 +97,10 @@ class PajGPSPositionData:
     direction: int
     speed: int
     battery: int
+    voltage: float | None = None
     last_elevation_update: float = 0.0
 
-    def __init__(self, device_id: int, lat: float, lng: float, direction:int, speed: int, battery: int) -> None:
+    def __init__(self, device_id: int, lat: float, lng: float, direction:int, speed: int, battery: int, voltage: float | None = None) -> None:
         """Initialize the PajGPSTracking class."""
         self.device_id = device_id
         self.lat = lat
@@ -108,6 +108,7 @@ class PajGPSPositionData:
         self.direction = direction
         self.speed = speed
         self.battery = battery
+        self.voltage = voltage
 
 class LoginResponse:
     token = None
@@ -395,16 +396,33 @@ class PajGPSData:
         try:
             json = await self.make_post_request(url, headers, payload=payload)
             self.positions_json = json
-            new_positions = [
-                PajGPSPositionData(
+            new_positions = []
+            for device in json["success"]:
+                # Parse voltage from 'volt' field if available, convert to volts
+                voltage = None
+                if "volt" in device:
+                    try:
+                        # Convert to volts - assuming the value might be in millivolts or other units
+                        volt_value = float(device["volt"])
+                        # If the value seems to be in millivolts (> 1000), convert to volts
+                        if volt_value > 100:
+                            voltage = volt_value / 1000.0
+                        else:
+                            voltage = volt_value
+                    except (ValueError, TypeError):
+                        voltage = None
+                        _LOGGER.warning(f"Invalid voltage value in position data: {device.get('volt')}")
+                
+                position = PajGPSPositionData(
                     device["iddevice"],
                     device["lat"],
                     device["lng"],
                     device["direction"],
                     device["speed"],
-                    device["battery"]
-                ) for device in json["success"]
-            ]
+                    device["battery"],
+                    voltage
+                )
+                new_positions.append(position)
             if self.fetch_elevation:
                 # Get new positions that have lat and lng different from old positions for same device
                 moved_device_ids = []
@@ -536,14 +554,6 @@ class PajGPSData:
                 device_data.alarm_power_cutoff_enabled = device["alarmstromunterbrechung"] == 1
                 device_data.alarm_ignition_enabled = device["alarmzuendalarm"] == 1
                 device_data.alarm_drop_enabled = device["alarm_fall_enabled"] == 1
-                # Parse voltage value if available
-                if "alarm_volt_value" in device:
-                    try:
-                        device_data.voltage = float(device["alarm_volt_value"])
-                    except (ValueError, TypeError):
-                        device_data.voltage = None
-                else:
-                    device_data.voltage = None
                 new_devices.append(device_data)
             self.devices = new_devices
         except ApiError as e:
