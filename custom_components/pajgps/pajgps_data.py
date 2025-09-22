@@ -28,6 +28,7 @@ class PajGPSDevice:
     imei: str
     model: str
     has_battery: bool
+    voltage: float | None = None
 
     # Alarms
     has_alarm_sos: bool
@@ -535,6 +536,14 @@ class PajGPSData:
                 device_data.alarm_power_cutoff_enabled = device["alarmstromunterbrechung"] == 1
                 device_data.alarm_ignition_enabled = device["alarmzuendalarm"] == 1
                 device_data.alarm_drop_enabled = device["alarm_fall_enabled"] == 1
+                # Parse voltage value if available
+                if "alarm_volt_value" in device:
+                    try:
+                        device_data.voltage = float(device["alarm_volt_value"])
+                    except (ValueError, TypeError):
+                        device_data.voltage = None
+                else:
+                    device_data.voltage = None
                 new_devices.append(device_data)
             self.devices = new_devices
         except ApiError as e:

@@ -254,6 +254,72 @@ class PajGPSElevationSensor(SensorEntity):
         return "m"
 
 
+class PajGPSVoltageSensor(SensorEntity):
+    """
+    Representation of a Paj GPS voltage sensor.
+    Takes the data from base PajGPSData object created in async_setup_entry.
+    """
+    _pajgps_data = None
+    _device_id = None
+    _voltage: float | None = None
+
+    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
+        """Initialize the sensor."""
+        self._pajgps_data = pajgps_data
+        self._device_id = device_id
+        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
+        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_voltage"
+        self._attr_name = f"{self._device_name} Voltage"
+        self._attr_icon = "mdi:lightning-bolt"
+
+    async def async_update(self) -> None:
+        """Update the sensor state."""
+        try:
+            await self._pajgps_data.async_update()
+            device = self._pajgps_data.get_device(self._device_id)
+            if device is not None:
+                self._voltage = device.voltage
+            else:
+                self._voltage = None
+        except Exception as e:
+            _LOGGER.error("Error updating voltage sensor: %s", e)
+            self._voltage = None
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return the device info."""
+        if self._pajgps_data is None:
+            return None
+        return self._pajgps_data.get_device_info(self._device_id)
+
+    @property
+    def should_poll(self) -> bool:
+        return True
+
+    @property
+    def device_class(self) -> SensorDeviceClass | str | None:
+        return SensorDeviceClass.VOLTAGE
+
+    @property
+    def state_class(self) -> SensorStateClass | str | None:
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> float | None:
+        if self._voltage is not None:
+            # Ensure voltage is a reasonable value (0-50V range for GPS devices)
+            if 0.0 <= self._voltage <= 50.0:
+                return self._voltage
+            else:
+                return None
+        else:
+            return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return "V"
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: config_entries.ConfigEntry,
@@ -293,6 +359,9 @@ async def async_setup_entry(
             # Check if this device model supports battery
             if pajgps_data.get_device(device_id).has_battery or pajgps_data.force_battery:
                 entities.append(PajGPSBatterySensor(pajgps_data, device_id))
+            # Check if this device model supports voltage
+            if pajgps_data.get_device(device_id).has_alarm_voltage:
+                entities.append(PajGPSVoltageSensor(pajgps_data, device_id))
             # Check if user wants to get elevation
             if pajgps_data.fetch_elevation:
                 entities.append(PajGPSElevationSensor(pajgps_data, device_id))
