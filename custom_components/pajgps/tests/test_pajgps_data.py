@@ -53,6 +53,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
              patch.object(self.data, 'update_position_data', new=AsyncMock()), \
              patch.object(self.data, 'update_alerts_data', new=AsyncMock()), \
              patch.object(self.data, 'update_devices_data', new=AsyncMock())):
+            self.data.token = "test_token"
+            await self.data.refresh_token()
             await self.data.async_update()
             assert self.data.last_update > 0
 
@@ -176,3 +178,21 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         position = self.data.get_position(device_id)
         assert position is not None
         assert position.elevation is not None
+
+    async def test_voltage_sensor(self):
+        """
+        Test the voltage sensor data.
+        """
+        await self.data.refresh_token()
+        await self.data.async_update()
+        # Check if any device has voltage data
+        found_voltage = False
+        for device_id in self.data.get_device_ids():
+            sensors = self.data.get_sensors(device_id)
+            if sensors is not None and sensors.voltage is not None:
+                found_voltage = True
+                print(f"Device ID: {device_id}, Voltage: {sensors.voltage}V")
+                assert sensors.voltage >= 0.0
+            else:
+                print(f"Device ID: {device_id} has no voltage data")
+        assert found_voltage, "No device with voltage data found"

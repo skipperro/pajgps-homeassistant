@@ -108,6 +108,13 @@ class PajGPSPositionData:
         self.speed = speed
         self.battery = battery
 
+
+class PajGPSSensorData:
+    """Representation of single Paj GPS device sensor data."""
+
+    device_id: int
+    voltage: float = 0.0
+
 class LoginResponse:
     token = None
     userID = None
@@ -158,6 +165,8 @@ class PajGPSData:
     devices: list[PajGPSDevice] = []
     alerts: list[PajGPSAlert] = []
     positions: list[PajGPSPositionData] = []
+    sensors: list[PajGPSSensorData] = []
+
 
     def __init__(self, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool, fetch_elevation: bool, force_battery: bool) -> None:
         """
@@ -334,6 +343,7 @@ class PajGPSData:
             await self.update_devices_data()
             await self.update_position_data()
             await self.update_alerts_data()
+            await self.update_sensors_data()
 
 
     def get_device(self, device_id: int) -> PajGPSDevice | None:
@@ -367,6 +377,13 @@ class PajGPSData:
         for position in self.positions:
             if position.device_id == device_id:
                 return position
+        return None
+
+    def get_sensors(self, device_id: int) -> PajGPSSensorData | None:
+        """Get sensor data by device id."""
+        for sensor in self.sensors:
+            if sensor.device_id == device_id:
+                return sensor
         return None
 
     def get_alerts(self, device_id: int) -> list[PajGPSAlert]:
@@ -545,6 +562,59 @@ class PajGPSData:
         except Exception as e:
             _LOGGER.error(f"Error while updating Paj GPS devices: {e}")
             self.devices = []
+
+
+    async def update_sensors_data(self) -> None:
+        """
+        Update the sensors data for all the devices from API and saves them in self.sensors.
+        Using aiohttp to avoid blocking.
+        Corresponding CURL command:
+        curl -X 'GET' \
+          'https://connect.paj-gps.de/api/v1/sensordata/last/{DeviceID}'
+
+        Response example:
+        {
+          "success": {
+            "ts": {
+              "$date": {
+                "$numberLong": "1758522050000"
+              }
+            },
+            "volt": 100000,
+            "did": 1242185,
+            "date_unix": {
+              "$date": {
+                "$numberLong": "1758499200000"
+              }
+            },
+            "date_iso": "2025-09-22T06:20:50+00:00"
+          }
+        }
+        """
+        headers = self.get_standard_headers()
+        new_sensors = []
+        for device in self.devices:
+            url = API_URL + f"sensordata/last/{device.id}"
+            try:
+                json = await self.make_get_request(url, headers)
+                sensor_data = PajGPSSensorData()
+                if "success" in json and "volt" in json["success"]:
+                    sensor_data.device_id = device.id
+                    # Convert from millivolts to volts and round to 1 decimal place
+                    sensor_data.voltage = round(json["success"]["volt"] / 1000, 1)
+                    new_sensors.append(sensor_data)
+                else:
+                    _LOGGER.debug(f"No sensor data for device {device.id}")
+                    sensor_data.device_id = device.id
+                    sensor_data.voltage = 0.0
+                    new_sensors.append(sensor_data)
+            except ApiError as e:
+                _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e.error}")
+            except TimeoutError as e:
+                _LOGGER.warning(f"Timeout while getting sensor data for device {device.id}.")
+            except Exception as e:
+                _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e}")
+        self.sensors = new_sensors
 
 
     async def consume_alerts(self, alert_ids: list[int]) -> None:
