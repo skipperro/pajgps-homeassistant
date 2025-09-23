@@ -82,6 +82,9 @@ class PajGPSVoltageSensor(SensorEntity):
                 new_value = 300.0
             return new_value
 
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return "V"
 
 class PajGPSBatterySensor(SensorEntity):
     """
