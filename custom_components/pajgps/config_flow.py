@@ -61,7 +61,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handles options flow for the component."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(
         self, user_input: Dict[str, Any] = None
@@ -69,35 +69,35 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         errors: Dict[str, str] = {}
 
         default_entry_name = ''
-        if 'entry_name' in self.config_entry.data:
-            default_entry_name = self.config_entry.data['entry_name']
-        if 'entry_name' in self.config_entry.options:
-            default_entry_name = self.config_entry.options['entry_name']
+        if 'entry_name' in self._config_entry.data:
+            default_entry_name = self._config_entry.data['entry_name']
+        if 'entry_name' in self._config_entry.options:
+            default_entry_name = self._config_entry.options['entry_name']
         default_email = ''
-        if 'email' in self.config_entry.data:
-            default_email = self.config_entry.data['email']
-        if 'email' in self.config_entry.options:
-            default_email = self.config_entry.options['email']
+        if 'email' in self._config_entry.data:
+            default_email = self._config_entry.data['email']
+        if 'email' in self._config_entry.options:
+            default_email = self._config_entry.options['email']
         default_password = ''
-        if 'password' in self.config_entry.data:
-            default_password = self.config_entry.data['password']
-        if 'password' in self.config_entry.options:
-            default_password = self.config_entry.options['password']
+        if 'password' in self._config_entry.data:
+            default_password = self._config_entry.data['password']
+        if 'password' in self._config_entry.options:
+            default_password = self._config_entry.options['password']
         default_mark_alerts_as_read = True
-        if 'mark_alerts_as_read' in self.config_entry.data:
-            default_mark_alerts_as_read = self.config_entry.data['mark_alerts_as_read']
-        if 'mark_alerts_as_read' in self.config_entry.options:
-            default_mark_alerts_as_read = self.config_entry.options['mark_alerts_as_read']
+        if 'mark_alerts_as_read' in self._config_entry.data:
+            default_mark_alerts_as_read = self._config_entry.data['mark_alerts_as_read']
+        if 'mark_alerts_as_read' in self._config_entry.options:
+            default_mark_alerts_as_read = self._config_entry.options['mark_alerts_as_read']
         default_fetch_elevation = False
-        if 'fetch_elevation' in self.config_entry.data:
-            default_fetch_elevation = self.config_entry.data['fetch_elevation']
-        if 'fetch_elevation' in self.config_entry.options:
-            default_fetch_elevation = self.config_entry.options['fetch_elevation']
+        if 'fetch_elevation' in self._config_entry.data:
+            default_fetch_elevation = self._config_entry.data['fetch_elevation']
+        if 'fetch_elevation' in self._config_entry.options:
+            default_fetch_elevation = self._config_entry.options['fetch_elevation']
         default_force_battery = False
-        if 'force_battery' in self.config_entry.data:
-            default_force_battery = self.config_entry.data['force_battery']
-        if 'force_battery' in self.config_entry.options:
-            default_force_battery = self.config_entry.options['force_battery']
+        if 'force_battery' in self._config_entry.data:
+            default_force_battery = self._config_entry.data['force_battery']
+        if 'force_battery' in self._config_entry.options:
+            default_force_battery = self._config_entry.options['force_battery']
 
         if user_input is not None:
             # If email is null or empty string, add error
@@ -109,7 +109,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if not errors:
                 # Update the config entry with the new data
                 new_data = {
-                    'guid': self.config_entry.data['guid'],
+                    'guid': self._config_entry.data['guid'],
                     'entry_name': user_input['entry_name'],
                     'email': user_input['email'],
                     'password': user_input['password'],
@@ -120,13 +120,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
                 # Get existing instance of PajGPSData
                 paj_data = PajGPSData.get_instance(
-                    self.config_entry.data['guid'],
-                    self.config_entry.data['entry_name'],
-                    self.config_entry.data['email'],
-                    self.config_entry.data['password'],
-                    self.config_entry.data['mark_alerts_as_read'],
-                    self.config_entry.data['fetch_elevation'],
-                    self.config_entry.data['force_battery'],
+                    self._config_entry.data['guid'],
+                    self._config_entry.data['entry_name'],
+                    self._config_entry.data['email'],
+                    self._config_entry.data['password'],
+                    self._config_entry.data['mark_alerts_as_read'],
+                    self._config_entry.data['fetch_elevation'],
+                    self._config_entry.data['force_battery'],
                 )
                 paj_data.entry_name = new_data['entry_name']
                 paj_data.email = new_data['email']
@@ -135,14 +135,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 paj_data.fetch_elevation = new_data['fetch_elevation']
                 paj_data.force_battery = new_data['force_battery']
 
-                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+                self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
 
                 await paj_data.refresh_token(True)
                 await paj_data.async_update(True)
 
                 # Rename the entry in the UI
                 self.hass.config_entries.async_update_entry(
-                    self.config_entry,
+                    self._config_entry,
                     data=new_data,
                     title=new_data['entry_name'],
                 )
