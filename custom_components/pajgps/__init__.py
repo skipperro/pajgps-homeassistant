@@ -64,4 +64,13 @@ async def async_unload_entry(
     hass: core.HomeAssistant, entry: config_entries.ConfigEntry
 ) -> bool:
     """Unload a config entry."""
+    # Close the session before unloading
+    guid = entry.data.get("guid")
+    if guid:
+        from .pajgps_data import PajGPSDataInstances
+        instance = PajGPSDataInstances.get(guid)
+        if instance:
+            await instance.async_close()
+            PajGPSDataInstances.pop(guid, None)
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

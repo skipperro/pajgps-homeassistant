@@ -10,12 +10,11 @@ import logging
 import time
 from datetime import timedelta
 import aiohttp
-from homeassistant.helpers.device_registry import DeviceInfo
-from custom_components.pajgps.const import DOMAIN, VERSION, ALERT_NAMES
+from custom_components.pajgps.const import DOMAIN, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-REQUEST_TIMEOUT = 5  # 5 seconds x 3 requests per update = 24 seconds (must stay below SCAN_INTERVAL)
+REQUEST_TIMEOUT = 25
 API_URL = "https://connect.paj-gps.de/api/v1/"
 
 
@@ -114,6 +113,8 @@ class PajGPSSensorData:
 
     device_id: int
     voltage: float = 0.0
+    device_update_time_ms: float = 0.0  # Time to update this specific device in milliseconds
+    total_update_time_ms: float = 0.0   # Total time for full PajGPS data update in milliseconds
 
 class LoginResponse:
     token = None
@@ -139,22 +140,29 @@ PajGPSDataInstances: dict[str, "PajGPSData"] = {}
 class PajGPSData:
     """Main class for PajGPS data handling."""
 
+    # Basic properties
     guid: str
+    entry_name: str
+
+    # Session properties
+    _session: aiohttp.ClientSession | None
+    _background_tasks: set[asyncio.Task]
 
     # Credentials properties
     email: str
     password: str
-    token: str
-    last_token_update: float = 0.0
-    token_ttl: int = 60 * 10  # 10 minutes
+    token: str | None
+    last_token_update: float
+    token_ttl: int = 60 * 5  # 5 minutes
 
     # Update properties
-    last_update: float = time.time() - 60
+    last_update: float
     data_ttl: int = int(SCAN_INTERVAL.total_seconds() / 2)  # update requests done more often than this many seconds will be ignored
-    mark_alerts_as_read: bool = True
-    update_lock = asyncio.Lock()
-    force_battery = True
-    fetch_elevation = True
+    mark_alerts_as_read: bool
+    update_lock: asyncio.Lock
+    force_battery: bool
+    fetch_elevation: bool
+    total_update_time_ms: float  # Total time of last full update in milliseconds
 
     # Pure json responses from API
     devices_json: str
@@ -162,10 +170,10 @@ class PajGPSData:
     positions_json: str
 
     # Deserialized data
-    devices: list[PajGPSDevice] = []
-    alerts: list[PajGPSAlert] = []
-    positions: list[PajGPSPositionData] = []
-    sensors: list[PajGPSSensorData] = []
+    devices: list[PajGPSDevice]
+    alerts: list[PajGPSAlert]
+    positions: list[PajGPSPositionData]
+    sensors: list[PajGPSSensorData]
 
 
     def __init__(self, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool, fetch_elevation: bool, force_battery: bool) -> None:
@@ -180,6 +188,41 @@ class PajGPSData:
         self.mark_alerts_as_read = mark_alerts_as_read
         self.fetch_elevation = fetch_elevation
         self.force_battery = force_battery
+        self._session = None
+        self._background_tasks = set()
+        self.update_lock = asyncio.Lock()
+        self.devices = []
+        self.alerts = []
+        self.positions = []
+        self.sensors = []
+        self.token = None
+        self.last_token_update = 0.0
+        self.last_update = time.time() - 60
+        self.total_update_time_ms = 0.0
+
+
+    async def _get_session(self):
+        """Get or create aiohttp session with configured timeout."""
+        if self._session is None or self._session.closed:
+            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            self._session = aiohttp.ClientSession(timeout=timeout)
+        return self._session
+
+    async def async_close(self) -> None:
+        """Close the session and cleanup resources."""
+        # Wait for any pending background tasks
+        if self._background_tasks:
+            _LOGGER.debug(f"Waiting for {len(self._background_tasks)} background tasks to complete...")
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            self._background_tasks.clear()
+
+        # Close the session
+        if self._session and not self._session.closed:
+            await self._session.close()
+            # Give the underlying connections time to close
+            await asyncio.sleep(0.25)
+            self._session = None
+            _LOGGER.debug("Session closed successfully.")
 
     @classmethod
     def get_instance(cls, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool, fetch_elevation: bool, force_battery: bool) -> "PajGPSData":
@@ -191,55 +234,78 @@ class PajGPSData:
         return PajGPSDataInstances[guid]
 
     @classmethod
-    def clean_instances(cls) -> None:
+    async def clean_instances(cls) -> None:
         """
         Clean all instances of PajGPSData.
         This is used for testing purposes to reset the singleton instances.
         """
+        for instance in PajGPSDataInstances.values():
+            await instance.async_close()
         PajGPSDataInstances.clear()
 
-    @staticmethod
-    async def make_get_request(url: str, headers: dict, params: dict = None, timeout: int = REQUEST_TIMEOUT):
+    async def make_get_request(self, url: str, headers: dict, params: dict = None):
         """Reusable function for making GET requests."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, params=params, timeout=timeout) as response:
-                if response.status == 200:
+        session = await self._get_session()
+        async with session.get(url, headers=headers, params=params) as response:
+            # Check content type before parsing
+            content_type = response.headers.get('Content-Type', '')
+
+            if response.status == 200:
+                if 'application/json' in content_type:
                     return await response.json()
                 else:
+                    _LOGGER.warning(
+                        f"Unexpected content type in successful response: {content_type} "
+                        f"(status {response.status}) from {url}"
+                    )
+                    text = await response.text()
+                    raise ValueError(f"Expected JSON but got {content_type}: {text[:200]}")
+
+            # Handle error responses
+            if 'application/json' in content_type:
+                try:
                     json = await response.json()
                     if json.get("error"):
                         raise ApiError(json)
+                except Exception as e:
+                    _LOGGER.error(
+                        f"Failed to parse error response as JSON from {url}: {e} "
+                        f"(status {response.status}, content-type: {content_type})"
+                    )
+                    raise
+            else:
+                # Non-JSON error response (e.g., HTML error page)
+                text = await response.text()
+                _LOGGER.warning(
+                    f"Received non-JSON error response from {url}: "
+                    f"status {response.status}, content-type: {content_type}, "
+                    f"body preview: {text[:200]}"
+                )
+                raise ValueError(
+                    f"HTTP {response.status} with {content_type} "
+                    f"(expected application/json) from {url}"
+                )
 
+        return None
 
-        # Close the session
-        await session.close()
-
-    @staticmethod
-    async def make_post_request(url: str, headers: dict, payload: dict = None, params: dict = None,
-                                timeout: int = REQUEST_TIMEOUT):
+    async def make_post_request(self, url: str, headers: dict, payload: dict = None, params: dict = None):
         """Reusable function for making POST requests."""
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload, params=params, timeout=timeout) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    json = await response.json()
-                    raise ApiError(json)
-        # Close the session
-        await session.close()
+        session = await self._get_session()
+        async with session.post(url, headers=headers, json=payload, params=params) as response:
+            if response.status == 200:
+                return await response.json()
+            json = await response.json()
+            raise ApiError(json)
 
-    @staticmethod
-    async def make_put_request(url: str, headers: dict, params: dict = None, timeout: int = REQUEST_TIMEOUT):
+    async def make_put_request(self, url: str, headers: dict, params: dict = None):
         """Reusable function for making PUT requests."""
-        async with aiohttp.ClientSession() as session:
-            async with session.put(url, headers=headers, params=params, timeout=timeout) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    json = await response.json()
-                    raise ApiError(json)
-        # Close the session
-        await session.close()
+        session = await self._get_session()
+        async with session.put(url, headers=headers, params=params) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                json = await response.json()
+                raise ApiError(json)
 
     async def get_login_token(self) -> str | None:
         """
@@ -333,6 +399,9 @@ class PajGPSData:
             if (time.time() - self.last_update) < self.data_ttl and not forced:
                 return
 
+            # Start timing the full update
+            update_start_time = time.perf_counter()
+
             # Update last update time
             self.last_update = time.time()
 
@@ -344,6 +413,14 @@ class PajGPSData:
             await self.update_position_data()
             await self.update_alerts_data()
             await self.update_sensors_data()
+
+            # Calculate total update time in milliseconds
+            total_duration_ms = (time.perf_counter() - update_start_time) * 1000
+            self.total_update_time_ms = total_duration_ms
+
+            # Update the total_update_time_ms for all sensor data
+            for sensor in self.sensors:
+                sensor.total_update_time_ms = total_duration_ms
 
 
     def get_device(self, device_id: int) -> PajGPSDevice | None:
@@ -434,7 +511,9 @@ class PajGPSData:
                 for device_id in moved_device_ids:
                     # Check if there was an update in the last 5 minutes
                     if time.time() - self.get_position(device_id).last_elevation_update > 60 * 5:
-                        asyncio.create_task(self.update_elevation(device_id))
+                        task = asyncio.create_task(self.update_elevation(device_id))
+                        self._background_tasks.add(task)
+                        task.add_done_callback(self._background_tasks.discard)
                         self.get_position(device_id).last_elevation_update = time.time()
 
             self.positions = new_positions
@@ -471,14 +550,32 @@ class PajGPSData:
         }
         try:
             json = await self.make_get_request(url, headers, params=params)
-            if "elevation" in json:
+            if json and "elevation" in json:
                 position.elevation = json["elevation"][0]
             else:
-                _LOGGER.error(f"Error while getting elevation data: {json}")
-        except TimeoutError as e:
-            _LOGGER.warning("Timeout while getting elevation data.")
+                _LOGGER.warning(
+                    f"Unexpected elevation response format for device {device_id} "
+                    f"at ({position.lat}, {position.lng}): {json}"
+                )
+                position.elevation = None
+        except TimeoutError:
+            _LOGGER.warning(
+                f"Timeout while getting elevation data for device {device_id} "
+                f"at ({position.lat}, {position.lng}) from Open-Meteo API"
+            )
+            position.elevation = None
+        except ValueError as e:
+            # Content-type mismatch or HTTP error
+            _LOGGER.warning(
+                f"Failed to get elevation for device {device_id} "
+                f"at ({position.lat}, {position.lng}): {e}"
+            )
+            position.elevation = None
         except Exception as e:
-            _LOGGER.error(f"Error while getting elevation data: {e}")
+            _LOGGER.error(
+                f"Unexpected error while getting elevation for device {device_id} "
+                f"at ({position.lat}, {position.lng}): {type(e).__name__}: {e}"
+            )
             position.elevation = None
 
 
@@ -506,7 +603,9 @@ class PajGPSData:
 
             if self.mark_alerts_as_read:
                 alert_ids = [alert.alert_type for alert in new_alerts]
-                asyncio.create_task(self.consume_alerts(alert_ids)) # Fire and forget to avoid blocking
+                task = asyncio.create_task(self.consume_alerts(alert_ids))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
         except ApiError as e:
             _LOGGER.error(f"Error while getting alerts data: {e.error}")
             self.alerts = []
@@ -567,6 +666,7 @@ class PajGPSData:
     async def update_sensors_data(self) -> None:
         """
         Update the sensors data for all the devices from API and saves them in self.sensors.
+        Also measures the time taken for each device's sensor update.
         Using aiohttp to avoid blocking.
         Corresponding CURL command:
         curl -X 'GET' \
@@ -593,27 +693,39 @@ class PajGPSData:
         """
         headers = self.get_standard_headers()
         new_sensors = []
+
         for device in self.devices:
+            # Start timing for this device
+            device_start_time = time.perf_counter()
+
             url = API_URL + f"sensordata/last/{device.id}"
+            sensor_data = PajGPSSensorData()
+            sensor_data.device_id = device.id
+
             try:
                 json = await self.make_get_request(url, headers)
-                sensor_data = PajGPSSensorData()
                 if "success" in json and "volt" in json["success"]:
-                    sensor_data.device_id = device.id
                     # Convert from millivolts to volts and round to 1 decimal place
                     sensor_data.voltage = round(json["success"]["volt"] / 1000, 1)
-                    new_sensors.append(sensor_data)
                 else:
                     _LOGGER.debug(f"No sensor data for device {device.id}")
-                    sensor_data.device_id = device.id
                     sensor_data.voltage = 0.0
-                    new_sensors.append(sensor_data)
             except ApiError as e:
                 _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e.error}")
+                sensor_data.voltage = 0.0
             except TimeoutError as e:
                 _LOGGER.warning(f"Timeout while getting sensor data for device {device.id}.")
+                sensor_data.voltage = 0.0
             except Exception as e:
                 _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e}")
+                sensor_data.voltage = 0.0
+
+            # Calculate time for this device's sensor update in milliseconds
+            device_duration_ms = (time.perf_counter() - device_start_time) * 1000
+            sensor_data.device_update_time_ms = device_duration_ms
+
+            new_sensors.append(sensor_data)
+
         self.sensors = new_sensors
 
 
