@@ -113,7 +113,6 @@ class PajGPSSensorData:
 
     device_id: int
     voltage: float = 0.0
-    device_update_time_ms: float = 0.0  # Time to update this specific device in milliseconds
     total_update_time_ms: float = 0.0   # Total time for full PajGPS data update in milliseconds
 
 class LoginResponse:
@@ -392,6 +391,16 @@ class PajGPSData:
         """
         # Check if we need to update data
         if (time.time() - self.last_update) < self.data_ttl and not forced:
+            return
+
+        # Skip if previous update is still running
+        if self.update_lock.locked():
+            time_since_last_update = time.time() - self.last_update
+            _LOGGER.warning(
+                f"Update skipped - previous update still running "
+                f"(started {time_since_last_update:.1f}s ago). "
+                f"API responses may be too slow for current SCAN_INTERVAL."
+            )
             return
 
         async with self.update_lock:
@@ -695,9 +704,6 @@ class PajGPSData:
         new_sensors = []
 
         for device in self.devices:
-            # Start timing for this device
-            device_start_time = time.perf_counter()
-
             url = API_URL + f"sensordata/last/{device.id}"
             sensor_data = PajGPSSensorData()
             sensor_data.device_id = device.id
@@ -720,9 +726,6 @@ class PajGPSData:
                 _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e}")
                 sensor_data.voltage = 0.0
 
-            # Calculate time for this device's sensor update in milliseconds
-            device_duration_ms = (time.perf_counter() - device_start_time) * 1000
-            sensor_data.device_update_time_ms = device_duration_ms
 
             new_sensors.append(sensor_data)
 

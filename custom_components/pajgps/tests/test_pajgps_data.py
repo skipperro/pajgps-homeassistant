@@ -531,22 +531,58 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         assert self.data.total_update_time_ms > 0
         print(f"Total update time: {self.data.total_update_time_ms:.2f}ms")
 
-        # Check that each device has update time measurements
+        # Check that each device has total update time measurements
         for device_id in self.data.get_device_ids():
             sensors = self.data.get_sensors(device_id)
             assert sensors is not None
-
-            # Check device update time
-            assert sensors.device_update_time_ms >= 0
-            print(f"Device {device_id} update time: {sensors.device_update_time_ms:.2f}ms")
 
             # Check total update time (should be same for all devices)
             assert sensors.total_update_time_ms == self.data.total_update_time_ms
             print(f"Device {device_id} total update time: {sensors.total_update_time_ms:.2f}ms")
 
-        # Verify that total update time is greater than individual device times
-        # (since it includes all API calls)
-        if len(self.data.sensors) > 0:
-            max_device_time = max(s.device_update_time_ms for s in self.data.sensors)
-            assert self.data.total_update_time_ms >= max_device_time
+    async def test_concurrent_update_skipped(self):
+        """
+        Test that concurrent updates are properly skipped when a previous update is still running.
+        This simulates slow API responses that cause updates to take longer than SCAN_INTERVAL.
+        """
+        await self.data.refresh_token()
 
+        # Track how many times the actual update methods are called
+        original_update_devices = self.data.update_devices_data
+        update_devices_call_count = 0
+
+        async def slow_update_devices():
+            """Simulate slow API response by adding delay"""
+            nonlocal update_devices_call_count
+            update_devices_call_count += 1
+            await asyncio.sleep(2)  # Simulate slow API
+            await original_update_devices()
+
+        # Patch the update method to be slow
+        self.data.update_devices_data = slow_update_devices
+
+        # Start first update (will take ~2 seconds)
+        first_update_task = asyncio.create_task(self.data.async_update(forced=True))
+
+        # Wait a bit to ensure first update has acquired the lock
+        await asyncio.sleep(0.1)
+
+        # Try to start second update while first is still running
+        # This should be skipped because lock is held
+        second_update_start_time = time.time()
+        await self.data.async_update(forced=True)
+        second_update_duration = time.time() - second_update_start_time
+
+        # Second update should return almost immediately (< 0.5s)
+        assert second_update_duration < 0.5, \
+            f"Second update took {second_update_duration:.2f}s, should have been skipped immediately"
+
+        # Wait for first update to complete
+        await first_update_task
+
+        # Verify that update_devices was only called once (from first update)
+        assert update_devices_call_count == 1, \
+            f"Expected 1 update call, but got {update_devices_call_count}"
+
+        print(f"✓ Second update was properly skipped (returned in {second_update_duration:.3f}s)")
+        print(f"✓ Only {update_devices_call_count} actual update was performed")

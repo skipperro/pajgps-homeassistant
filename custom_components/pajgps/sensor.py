@@ -321,64 +321,6 @@ class PajGPSElevationSensor(SensorEntity):
         return "m"
 
 
-class PajGPSDeviceUpdateTimeSensor(SensorEntity):
-    """
-    Representation of a Paj GPS device update time sensor.
-    Measures the time taken to update this specific device's data.
-    """
-    _pajgps_data = None
-    _device_id = None
-    _update_time: float | None = None
-
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
-        """Initialize the sensor."""
-        self._pajgps_data = pajgps_data
-        self._device_id = device_id
-        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_device_update_time"
-        self._attr_name = f"{self._device_name} Update Time"
-        self._attr_icon = "mdi:timer-outline"
-
-    async def async_update(self) -> None:
-        """Update the sensor state."""
-        try:
-            await self._pajgps_data.async_update()
-            sensor_data = self._pajgps_data.get_sensors(self._device_id)
-            if sensor_data is not None:
-                self._update_time = sensor_data.device_update_time_ms
-            else:
-                self._update_time = None
-        except Exception as e:
-            _LOGGER.error("Error updating device update time sensor: %s", e)
-            self._update_time = None
-
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-        if self._pajgps_data is None:
-            return None
-        return self._pajgps_data.get_device_info(self._device_id)
-
-    @property
-    def should_poll(self) -> bool:
-        return True
-
-    @property
-    def device_class(self) -> SensorDeviceClass | str | None:
-        return SensorDeviceClass.DURATION
-
-    @property
-    def state_class(self) -> SensorStateClass | str | None:
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_value(self) -> float | None:
-        return self._update_time
-
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        return "ms"
-
 
 class PajGPSTotalUpdateTimeSensor(SensorEntity):
     """
@@ -484,8 +426,7 @@ async def async_setup_entry(
             # Add voltage sensor for all devices
             # TODO: Think of a way to disable this if not needed
             entities.append(PajGPSVoltageSensor(pajgps_data, device_id))
-            # Add update time sensors for all devices
-            entities.append(PajGPSDeviceUpdateTimeSensor(pajgps_data, device_id))
+            # Add total update time sensor for all devices
             entities.append(PajGPSTotalUpdateTimeSensor(pajgps_data, device_id))
 
         if entities and async_add_entities:
