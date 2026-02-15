@@ -15,7 +15,7 @@ from custom_components.pajgps.const import DOMAIN, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-REQUEST_TIMEOUT = 5
+REQUEST_TIMEOUT = 15
 API_URL = "https://connect.paj-gps.de/api/v1/"
 
 
@@ -402,7 +402,7 @@ class PajGPSData:
             return None
 
     async def refresh_token(self, forced: bool = False) -> None:
-        # Refresh token once every 10 minutes
+        # Refresh token once every 5 minutes
         if (time.time() - self.last_token_update > self.token_ttl) or self.token is None or forced:
             _LOGGER.debug("Refreshing token...")
             try:
@@ -495,11 +495,13 @@ class PajGPSData:
             # Check if we need to refresh token
             await self.refresh_token()
 
-            # Fetch the new data from the API
-            await self.update_devices_data()
-            await self.update_position_data()
-            await self.update_alerts_data()
-            await self.update_sensors_data()
+            # Fetch the new data from the API in parallel
+            await asyncio.gather(
+                self.update_devices_data(),
+                self.update_position_data(),
+                self.update_alerts_data(),
+                self.update_sensors_data()
+            )
 
             # Calculate total update time in milliseconds
             total_duration_ms = (time.perf_counter() - update_start_time) * 1000
