@@ -7,6 +7,7 @@ instead of each sensor making its own API calls.
 """
 import asyncio
 import logging
+import random
 import time
 from datetime import timedelta
 import aiohttp
@@ -451,20 +452,8 @@ class PajGPSData:
         if (time.time() - self.last_update) < self.data_ttl and not forced:
             return
 
-        # Check if the Internet connection is available by pinging the API URL with a HEAD request
-        try:
-            session = await self._get_session()
-            async with session.head("https://connect.paj-gps.de", timeout=REQUEST_TIMEOUT) as response:
-                if response.status != 200:
-                    _LOGGER.warning(f"API URL is not reachable (status {response.status}). Skipping update.")
-                    # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
-                    self.last_update = time.time() + 60
-                    return # Skip update if API is not reachable
-        except (asyncio.TimeoutError, TimeoutError):
-            _LOGGER.warning(f"Timeout while checking API URL. Skipping update.")
-            # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
-            self.last_update = time.time() + 60
-            return
+        # Wait small, random time to avoid multiple updates at the same time
+        await asyncio.sleep(random.random() * 0.1)
 
         # Skip if previous update is still running
         if self.update_lock.locked():
@@ -480,6 +469,21 @@ class PajGPSData:
         async with self.update_lock:
             # Check again if we need to update data
             if (time.time() - self.last_update) < self.data_ttl and not forced:
+                return
+
+            # Check if the Internet connection is available by pinging the API URL with a HEAD request
+            try:
+                session = await self._get_session()
+                async with session.head("https://connect.paj-gps.de", timeout=REQUEST_TIMEOUT) as response:
+                    if response.status != 200:
+                        _LOGGER.warning(f"API URL is not reachable (status {response.status}). Skipping update.")
+                        # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
+                        self.last_update = time.time() + 60
+                        return  # Skip update if API is not reachable
+            except (asyncio.TimeoutError, TimeoutError):
+                _LOGGER.warning(f"Timeout while checking API URL. Skipping update.")
+                # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
+                self.last_update = time.time() + 60
                 return
 
             # Start timing the full update
