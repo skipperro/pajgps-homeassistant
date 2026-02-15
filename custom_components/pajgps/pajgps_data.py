@@ -474,11 +474,12 @@ class PajGPSData:
         # Skip if previous update is still running
         if self.update_lock.locked():
             time_since_last_update = time.time() - self.last_update
-            _LOGGER.warning(
-                f"Update skipped - previous update still running "
-                f"(started {time_since_last_update:.1f}s ago). "
-                f"API responses may be too slow for current SCAN_INTERVAL."
-            )
+            if time_since_last_update > self.data_ttl:
+                _LOGGER.warning(
+                    f"Update skipped - previous update still running "
+                    f"(started {time_since_last_update:.1f}s ago). "
+                    f"API responses may be too slow for current SCAN_INTERVAL."
+                )
             return
 
         async with self.update_lock:
