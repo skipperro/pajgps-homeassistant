@@ -292,13 +292,10 @@ class PajGPSData:
             except (asyncio.TimeoutError, TimeoutError) as e:
                 last_error = e
                 if attempt < max_attempts - 1:
-                    _LOGGER.warning(
-                        f"Timeout on GET request to {url} (attempt {attempt + 1}/{max_attempts}), retrying..."
-                    )
                     await asyncio.sleep(0.5)  # Small delay before retry
                     continue
                 else:
-                    _LOGGER.error(
+                    _LOGGER.warning(
                         f"Timeout on GET request to {url} after {max_attempts} attempts"
                     )
                     raise
@@ -324,13 +321,10 @@ class PajGPSData:
             except (asyncio.TimeoutError, TimeoutError) as e:
                 last_error = e
                 if attempt < max_attempts - 1:
-                    _LOGGER.warning(
-                        f"Timeout on POST request to {url} (attempt {attempt + 1}/{max_attempts}), retrying..."
-                    )
                     await asyncio.sleep(0.5)  # Small delay before retry
                     continue
                 else:
-                    _LOGGER.error(
+                    _LOGGER.warning(
                         f"Timeout on POST request to {url} after {max_attempts} attempts"
                     )
                     raise
@@ -357,13 +351,10 @@ class PajGPSData:
             except (asyncio.TimeoutError, TimeoutError) as e:
                 last_error = e
                 if attempt < max_attempts - 1:
-                    _LOGGER.warning(
-                        f"Timeout on PUT request to {url} (attempt {attempt + 1}/{max_attempts}), retrying..."
-                    )
                     await asyncio.sleep(0.5)  # Small delay before retry
                     continue
                 else:
-                    _LOGGER.error(
+                    _LOGGER.warning(
                         f"Timeout on PUT request to {url} after {max_attempts} attempts"
                     )
                     raise
@@ -465,10 +456,14 @@ class PajGPSData:
             session = await self._get_session()
             async with session.head("https://connect.paj-gps.de", timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
-                    _LOGGER.warning(f"API URL {API_URL} is not reachable (status {response.status}). Skipping update.")
+                    _LOGGER.warning(f"API URL is not reachable (status {response.status}). Skipping update.")
+                    # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
+                    self.last_update = time.time() + 60
                     return # Skip update if API is not reachable
         except (asyncio.TimeoutError, TimeoutError):
-            _LOGGER.warning(f"Timeout while checking API URL {API_URL}. Skipping update.")
+            _LOGGER.warning(f"Timeout while checking API URL. Skipping update.")
+            # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
+            self.last_update = time.time() + 60
             return
 
         # Skip if previous update is still running
