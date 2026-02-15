@@ -447,27 +447,23 @@ class PajGPSData:
         Update the data from the PajGPS API.
         This method is called by the update coordinator.
         It fetches the data from the API and updates the internal state.
+        Ensures only one update runs at a time per instance.
         """
-        # Check if we need to update data
+        # Quick check before attempting to acquire lock
         if (time.time() - self.last_update) < self.data_ttl and not forced:
             return
 
         # Wait small, random time to avoid multiple updates at the same time
-        await asyncio.sleep(random.random() * 0.1)
+        await asyncio.sleep(random.random())
 
         # Skip if previous update is still running
         if self.update_lock.locked():
-            time_since_last_update = time.time() - self.last_update
-            if time_since_last_update > self.data_ttl:
-                _LOGGER.warning(
-                    f"Update skipped - previous update still running "
-                    f"(started {time_since_last_update:.1f}s ago). "
-                    f"API responses may be too slow for current SCAN_INTERVAL."
-                )
+            _LOGGER.debug("Update already in progress, skipping this update.")
             return
 
+        # Acquire lock for the actual update work
         async with self.update_lock:
-            # Check again if we need to update data
+            # Double-check after acquiring lock (time may have passed)
             if (time.time() - self.last_update) < self.data_ttl and not forced:
                 return
 
@@ -489,7 +485,7 @@ class PajGPSData:
             # Start timing the full update
             update_start_time = time.perf_counter()
 
-            # Update last update time
+            # Update last update time BEFORE starting work to prevent parallel executions
             self.last_update = time.time()
 
             # Check if we need to refresh token
@@ -502,6 +498,8 @@ class PajGPSData:
                 self.update_alerts_data(),
                 self.update_sensors_data()
             )
+
+            self.last_update = time.time()
 
             # Calculate total update time in milliseconds
             total_duration_ms = (time.perf_counter() - update_start_time) * 1000
