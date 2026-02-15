@@ -2,7 +2,7 @@ import os
 import time
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 import custom_components.pajgps.pajgps_data as pajgps_data
 from dotenv import load_dotenv
 
@@ -586,3 +586,186 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
 
         print(f"✓ Second update was properly skipped (returned in {second_update_duration:.3f}s)")
         print(f"✓ Only {update_devices_call_count} actual update was performed")
+
+    async def test_get_request_retry_on_timeout(self):
+        """
+        Test that make_get_request retries up to 3 times on timeout.
+        """
+        await self.data.refresh_token()
+
+        call_count = [0]
+
+        class MockContextManager:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.status = 200
+                self.headers = {'Content-Type': 'application/json'}
+
+            async def json(self):
+                return {"success": "data"}
+
+            async def __aenter__(self):
+                self.call_count[0] += 1
+                if self.call_count[0] < 3:
+                    raise asyncio.TimeoutError("Simulated timeout")
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        # Patch session.get to return our mock
+        session = await self.data._get_session()
+        original_get = session.get
+        session.get = lambda *args, **kwargs: MockContextManager(call_count)
+
+        try:
+            result = await self.data.make_get_request("http://test.com", {})
+            assert call_count[0] == 3, f"Expected 3 attempts, but got {call_count[0]}"
+            assert result == {"success": "data"}
+            print(f"✓ GET request succeeded after {call_count[0]} attempts (2 timeouts, 1 success)")
+        finally:
+            session.get = original_get
+
+    async def test_get_request_fails_after_max_retries(self):
+        """
+        Test that make_get_request fails after 3 timeout attempts.
+        """
+        await self.data.refresh_token()
+
+        call_count = [0]
+
+        class MockContextManager:
+            def __init__(self, call_count):
+                self.call_count = call_count
+
+            async def __aenter__(self):
+                self.call_count[0] += 1
+                raise asyncio.TimeoutError("Simulated timeout")
+
+            async def __aexit__(self, *args):
+                pass
+
+        session = await self.data._get_session()
+        original_get = session.get
+        session.get = lambda *args, **kwargs: MockContextManager(call_count)
+
+        try:
+            with self.assertRaises(asyncio.TimeoutError):
+                await self.data.make_get_request("http://test.com", {})
+
+            assert call_count[0] == 3, f"Expected 3 attempts, but got {call_count[0]}"
+            print(f"✓ GET request properly failed after {call_count[0]} timeout attempts")
+        finally:
+            session.get = original_get
+
+    async def test_post_request_retry_on_timeout(self):
+        """
+        Test that make_post_request retries up to 3 times on timeout.
+        """
+        await self.data.refresh_token()
+
+        call_count = [0]
+
+        class MockContextManager:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.status = 200
+
+            async def json(self):
+                return {"success": "posted"}
+
+            async def __aenter__(self):
+                self.call_count[0] += 1
+                if self.call_count[0] < 2:
+                    raise asyncio.TimeoutError("Simulated timeout")
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        session = await self.data._get_session()
+        original_post = session.post
+        session.post = lambda *args, **kwargs: MockContextManager(call_count)
+
+        try:
+            result = await self.data.make_post_request("http://test.com", {}, {"data": "test"})
+            assert call_count[0] == 2, f"Expected 2 attempts, but got {call_count[0]}"
+            assert result == {"success": "posted"}
+            print(f"✓ POST request succeeded after {call_count[0]} attempts (1 timeout, 1 success)")
+        finally:
+            session.post = original_post
+
+    async def test_put_request_retry_on_timeout(self):
+        """
+        Test that make_put_request retries up to 3 times on timeout.
+        """
+        await self.data.refresh_token()
+
+        call_count = [0]
+
+        class MockContextManager:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.status = 200
+
+            async def json(self):
+                return {"success": "updated"}
+
+            async def __aenter__(self):
+                self.call_count[0] += 1
+                if self.call_count[0] < 2:
+                    raise asyncio.TimeoutError("Simulated timeout")
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        session = await self.data._get_session()
+        original_put = session.put
+        session.put = lambda *args, **kwargs: MockContextManager(call_count)
+
+        try:
+            result = await self.data.make_put_request("http://test.com", {})
+            assert call_count[0] == 2, f"Expected 2 attempts, but got {call_count[0]}"
+            assert result == {"success": "updated"}
+            print(f"✓ PUT request succeeded after {call_count[0]} attempts (1 timeout, 1 success)")
+        finally:
+            session.put = original_put
+
+    async def test_non_timeout_errors_not_retried(self):
+        """
+        Test that non-timeout errors are not retried.
+        """
+        await self.data.refresh_token()
+
+        call_count = [0]
+
+        class MockContextManager:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.status = 400
+                self.headers = {'Content-Type': 'application/json'}
+
+            async def json(self):
+                return {"error": "Bad request"}
+
+            async def __aenter__(self):
+                self.call_count[0] += 1
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+        session = await self.data._get_session()
+        original_get = session.get
+        session.get = lambda *args, **kwargs: MockContextManager(call_count)
+
+        try:
+            with self.assertRaises(pajgps_data.ApiError):
+                await self.data.make_get_request("http://test.com", {})
+
+            assert call_count[0] == 1, f"Expected 1 attempt for non-timeout error, but got {call_count[0]}"
+            print(f"✓ Non-timeout error properly failed immediately without retry")
+        finally:
+            session.get = original_get
+

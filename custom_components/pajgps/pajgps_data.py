@@ -14,7 +14,7 @@ from custom_components.pajgps.const import DOMAIN, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-REQUEST_TIMEOUT = 25
+REQUEST_TIMEOUT = 5
 API_URL = "https://connect.paj-gps.de/api/v1/"
 
 
@@ -243,68 +243,135 @@ class PajGPSData:
         PajGPSDataInstances.clear()
 
     async def make_get_request(self, url: str, headers: dict, params: dict = None):
-        """Reusable function for making GET requests."""
-        session = await self._get_session()
-        async with session.get(url, headers=headers, params=params) as response:
-            # Check content type before parsing
-            content_type = response.headers.get('Content-Type', '')
+        """Reusable function for making GET requests with automatic retry on timeout."""
+        max_attempts = 3
+        last_error = None
 
-            if response.status == 200:
-                if 'application/json' in content_type:
-                    return await response.json()
-                else:
+        for attempt in range(max_attempts):
+            try:
+                session = await self._get_session()
+                async with session.get(url, headers=headers, params=params) as response:
+                    # Check content type before parsing
+                    content_type = response.headers.get('Content-Type', '')
+
+                    if response.status == 200:
+                        if 'application/json' in content_type:
+                            return await response.json()
+                        else:
+                            _LOGGER.warning(
+                                f"Unexpected content type in successful response: {content_type} "
+                                f"(status {response.status}) from {url}"
+                            )
+                            text = await response.text()
+                            raise ValueError(f"Expected JSON but got {content_type}: {text[:200]}")
+
+                    # Handle error responses
+                    if 'application/json' in content_type:
+                        try:
+                            json = await response.json()
+                            if json.get("error"):
+                                raise ApiError(json)
+                        except Exception as e:
+                            _LOGGER.error(
+                                f"Failed to parse error response as JSON from {url}: {e} "
+                                f"(status {response.status}, content-type: {content_type})"
+                            )
+                            raise
+                    else:
+                        # Non-JSON error response (e.g., HTML error page)
+                        text = await response.text()
+                        _LOGGER.warning(
+                            f"Received non-JSON error response from {url}: "
+                            f"status {response.status}, content-type: {content_type}, "
+                            f"body preview: {text[:200]}"
+                        )
+                        raise ValueError(
+                            f"HTTP {response.status} with {content_type} "
+                            f"(expected application/json) from {url}"
+                        )
+            except (asyncio.TimeoutError, TimeoutError) as e:
+                last_error = e
+                if attempt < max_attempts - 1:
                     _LOGGER.warning(
-                        f"Unexpected content type in successful response: {content_type} "
-                        f"(status {response.status}) from {url}"
+                        f"Timeout on GET request to {url} (attempt {attempt + 1}/{max_attempts}), retrying..."
                     )
-                    text = await response.text()
-                    raise ValueError(f"Expected JSON but got {content_type}: {text[:200]}")
-
-            # Handle error responses
-            if 'application/json' in content_type:
-                try:
-                    json = await response.json()
-                    if json.get("error"):
-                        raise ApiError(json)
-                except Exception as e:
+                    await asyncio.sleep(0.5)  # Small delay before retry
+                    continue
+                else:
                     _LOGGER.error(
-                        f"Failed to parse error response as JSON from {url}: {e} "
-                        f"(status {response.status}, content-type: {content_type})"
+                        f"Timeout on GET request to {url} after {max_attempts} attempts"
                     )
                     raise
-            else:
-                # Non-JSON error response (e.g., HTML error page)
-                text = await response.text()
-                _LOGGER.warning(
-                    f"Received non-JSON error response from {url}: "
-                    f"status {response.status}, content-type: {content_type}, "
-                    f"body preview: {text[:200]}"
-                )
-                raise ValueError(
-                    f"HTTP {response.status} with {content_type} "
-                    f"(expected application/json) from {url}"
-                )
+            except Exception as e:
+                # For non-timeout errors, don't retry
+                raise
 
         return None
 
     async def make_post_request(self, url: str, headers: dict, payload: dict = None, params: dict = None):
-        """Reusable function for making POST requests."""
-        session = await self._get_session()
-        async with session.post(url, headers=headers, json=payload, params=params) as response:
-            if response.status == 200:
-                return await response.json()
-            json = await response.json()
-            raise ApiError(json)
+        """Reusable function for making POST requests with automatic retry on timeout."""
+        max_attempts = 3
+        last_error = None
+
+        for attempt in range(max_attempts):
+            try:
+                session = await self._get_session()
+                async with session.post(url, headers=headers, json=payload, params=params) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    json = await response.json()
+                    raise ApiError(json)
+            except (asyncio.TimeoutError, TimeoutError) as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    _LOGGER.warning(
+                        f"Timeout on POST request to {url} (attempt {attempt + 1}/{max_attempts}), retrying..."
+                    )
+                    await asyncio.sleep(0.5)  # Small delay before retry
+                    continue
+                else:
+                    _LOGGER.error(
+                        f"Timeout on POST request to {url} after {max_attempts} attempts"
+                    )
+                    raise
+            except Exception as e:
+                # For non-timeout errors, don't retry
+                raise
+
+        return None
 
     async def make_put_request(self, url: str, headers: dict, params: dict = None):
-        """Reusable function for making PUT requests."""
-        session = await self._get_session()
-        async with session.put(url, headers=headers, params=params) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                json = await response.json()
-                raise ApiError(json)
+        """Reusable function for making PUT requests with automatic retry on timeout."""
+        max_attempts = 3
+        last_error = None
+
+        for attempt in range(max_attempts):
+            try:
+                session = await self._get_session()
+                async with session.put(url, headers=headers, params=params) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    else:
+                        json = await response.json()
+                        raise ApiError(json)
+            except (asyncio.TimeoutError, TimeoutError) as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    _LOGGER.warning(
+                        f"Timeout on PUT request to {url} (attempt {attempt + 1}/{max_attempts}), retrying..."
+                    )
+                    await asyncio.sleep(0.5)  # Small delay before retry
+                    continue
+                else:
+                    _LOGGER.error(
+                        f"Timeout on PUT request to {url} after {max_attempts} attempts"
+                    )
+                    raise
+            except Exception as e:
+                # For non-timeout errors, don't retry
+                raise
+
+        return None
 
     async def get_login_token(self) -> str | None:
         """
