@@ -460,6 +460,17 @@ class PajGPSData:
         if (time.time() - self.last_update) < self.data_ttl and not forced:
             return
 
+        # Check if the Internet connection is available by pinging the API URL with a HEAD request
+        try:
+            session = await self._get_session()
+            async with session.head("https://connect.paj-gps.de", timeout=REQUEST_TIMEOUT) as response:
+                if response.status != 200:
+                    _LOGGER.warning(f"API URL {API_URL} is not reachable (status {response.status}). Skipping update.")
+                    return # Skip update if API is not reachable
+        except (asyncio.TimeoutError, TimeoutError):
+            _LOGGER.warning(f"Timeout while checking API URL {API_URL}. Skipping update.")
+            return
+
         # Skip if previous update is still running
         if self.update_lock.locked():
             time_since_last_update = time.time() - self.last_update
