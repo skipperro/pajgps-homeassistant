@@ -12,10 +12,14 @@ import time
 from datetime import timedelta
 import aiohttp
 from custom_components.pajgps.const import DOMAIN, VERSION
+from custom_components.pajgps.requests import (
+    make_request,
+    ApiResponseError,
+    check_pajgps_availability,
+)
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=30)
-REQUEST_TIMEOUT = 15
 API_URL = "https://connect.paj-gps.de/api/v1/"
 
 
@@ -72,7 +76,7 @@ class PajGPSDevice:
         elif _alert_type == 13:              # Voltage Alert
             return self.has_alarm_voltage and self.alarm_voltage_enabled
         else:
-            _LOGGER.error(f"Unknown alert type: {_alert_type}")
+            _LOGGER.error("Unknown alert type: %s", _alert_type)
             return False
 
 
@@ -201,18 +205,11 @@ class PajGPSData:
         self.total_update_time_ms = 0.0
 
 
-    async def _get_session(self):
-        """Get or create aiohttp session with configured timeout."""
-        if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
-            self._session = aiohttp.ClientSession(timeout=timeout)
-        return self._session
-
     async def async_close(self) -> None:
         """Close the session and cleanup resources."""
         # Wait for any pending background tasks
         if self._background_tasks:
-            _LOGGER.debug(f"Waiting for {len(self._background_tasks)} background tasks to complete...")
+            _LOGGER.debug("Waiting for %s background tasks to complete", len(self._background_tasks))
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
             self._background_tasks.clear()
 
@@ -222,7 +219,7 @@ class PajGPSData:
             # Give the underlying connections time to close
             await asyncio.sleep(0.25)
             self._session = None
-            _LOGGER.debug("Session closed successfully.")
+            _LOGGER.debug("Session closed successfully")
 
     @classmethod
     def get_instance(cls, guid: str, entry_name: str, email: str, password: str, mark_alerts_as_read: bool, fetch_elevation: bool, force_battery: bool) -> "PajGPSData":
@@ -242,128 +239,6 @@ class PajGPSData:
         for instance in PajGPSDataInstances.values():
             await instance.async_close()
         PajGPSDataInstances.clear()
-
-    async def make_get_request(self, url: str, headers: dict, params: dict = None):
-        """Reusable function for making GET requests with automatic retry on timeout."""
-        max_attempts = 3
-        last_error = None
-
-        for attempt in range(max_attempts):
-            try:
-                session = await self._get_session()
-                async with session.get(url, headers=headers, params=params) as response:
-                    # Check content type before parsing
-                    content_type = response.headers.get('Content-Type', '')
-
-                    if response.status == 200:
-                        if 'application/json' in content_type:
-                            return await response.json()
-                        else:
-                            _LOGGER.warning(
-                                f"Unexpected content type in successful response: {content_type} "
-                                f"(status {response.status}) from {url}"
-                            )
-                            text = await response.text()
-                            raise ValueError(f"Expected JSON but got {content_type}: {text[:200]}")
-
-                    # Handle error responses
-                    if 'application/json' in content_type:
-                        try:
-                            json = await response.json()
-                            if json.get("error"):
-                                raise ApiError(json)
-                        except Exception as e:
-                            _LOGGER.error(
-                                f"Failed to parse error response as JSON from {url}: {e} "
-                                f"(status {response.status}, content-type: {content_type})"
-                            )
-                            raise
-                    else:
-                        # Non-JSON error response (e.g., HTML error page)
-                        text = await response.text()
-                        _LOGGER.warning(
-                            f"Received non-JSON error response from {url}: "
-                            f"status {response.status}, content-type: {content_type}, "
-                            f"body preview: {text[:200]}"
-                        )
-                        raise ValueError(
-                            f"HTTP {response.status} with {content_type} "
-                            f"(expected application/json) from {url}"
-                        )
-            except (asyncio.TimeoutError, TimeoutError) as e:
-                last_error = e
-                if attempt < max_attempts - 1:
-                    await asyncio.sleep(0.5)  # Small delay before retry
-                    continue
-                else:
-                    _LOGGER.warning(
-                        f"Timeout on GET request to {url} after {max_attempts} attempts"
-                    )
-                    raise
-            except Exception as e:
-                # For non-timeout errors, don't retry
-                raise
-
-        return None
-
-    async def make_post_request(self, url: str, headers: dict, payload: dict = None, params: dict = None):
-        """Reusable function for making POST requests with automatic retry on timeout."""
-        max_attempts = 3
-        last_error = None
-
-        for attempt in range(max_attempts):
-            try:
-                session = await self._get_session()
-                async with session.post(url, headers=headers, json=payload, params=params) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    json = await response.json()
-                    raise ApiError(json)
-            except (asyncio.TimeoutError, TimeoutError) as e:
-                last_error = e
-                if attempt < max_attempts - 1:
-                    await asyncio.sleep(0.5)  # Small delay before retry
-                    continue
-                else:
-                    _LOGGER.warning(
-                        f"Timeout on POST request to {url} after {max_attempts} attempts"
-                    )
-                    raise
-            except Exception as e:
-                # For non-timeout errors, don't retry
-                raise
-
-        return None
-
-    async def make_put_request(self, url: str, headers: dict, params: dict = None):
-        """Reusable function for making PUT requests with automatic retry on timeout."""
-        max_attempts = 3
-        last_error = None
-
-        for attempt in range(max_attempts):
-            try:
-                session = await self._get_session()
-                async with session.put(url, headers=headers, params=params) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        json = await response.json()
-                        raise ApiError(json)
-            except (asyncio.TimeoutError, TimeoutError) as e:
-                last_error = e
-                if attempt < max_attempts - 1:
-                    await asyncio.sleep(0.5)  # Small delay before retry
-                    continue
-                else:
-                    _LOGGER.warning(
-                        f"Timeout on PUT request to {url} after {max_attempts} attempts"
-                    )
-                    raise
-            except Exception as e:
-                # For non-timeout errors, don't retry
-                raise
-
-        return None
 
     async def get_login_token(self) -> str | None:
         """
@@ -389,41 +264,37 @@ class PajGPSData:
             'password': self.password
         }
         try:
-            json = await self.make_post_request(url, headers, params=params)
+            json = await make_request("POST", url, headers, params=params)
             login_response = LoginResponse(json)
             return login_response.token
+        except ApiResponseError as e:
+            raise ApiError(e.error_json)
         except ApiError as e:
-            _LOGGER.error(f"Error while getting login token: {e.error}")
+            _LOGGER.error("Error while getting login token: %s", e.error)
             return None
         except TimeoutError as e:
-            _LOGGER.error("Timeout while getting login token.")
-        except Exception as e:
-            _LOGGER.error(f"Error while getting login token: {e}")
-            return None
+            _LOGGER.error("Timeout while getting login token")
 
     async def refresh_token(self, forced: bool = False) -> None:
         # Refresh token once every 5 minutes
         if (time.time() - self.last_token_update > self.token_ttl) or self.token is None or forced:
-            _LOGGER.debug("Refreshing token...")
+            _LOGGER.debug("Refreshing token")
+            new_token = None
             try:
-                email = self.email # self.hass.config_entries.async_entries(DOMAIN)[0].data["email"]
-                password = self.password # self.hass.config_entries.async_entries(DOMAIN)[0].data["password"]
-
                 # Fetch new token
                 new_token = await self.get_login_token()
-                if new_token:
-                    self.token = new_token
-                    self.last_token_update = time.time()
-                    _LOGGER.debug("Token refreshed successfully.")
-                else:
-                    _LOGGER.error("Failed to refresh token.")
             except TimeoutError as e:
-                _LOGGER.error("Timeout while getting login token.")
-            except Exception as e:
-                _LOGGER.error(f"Error during token refresh: {e}")
-                self.clean_data()
+                _LOGGER.error("Timeout while getting login token")
+
+            if new_token:
+                self.token = new_token
+                self.last_token_update = time.time()
+                _LOGGER.debug("Token refreshed successfully")
+            else:
+                _LOGGER.error("Failed to refresh token")
+
         else:
-            _LOGGER.debug("Token refresh skipped (still valid).")
+            _LOGGER.debug("Token refresh skipped (still valid)")
 
     def clean_data(self):
         self.devices = []
@@ -442,7 +313,7 @@ class PajGPSData:
         }
 
 
-    async def async_update(self, forced: bool = False) -> None:
+    async def update_pajgps_data(self, forced: bool = False) -> None:
         """
         Update the data from the PajGPS API.
         This method is called by the update coordinator.
@@ -458,7 +329,7 @@ class PajGPSData:
 
         # Skip if previous update is still running
         if self.update_lock.locked():
-            _LOGGER.debug("Update already in progress, skipping this update.")
+            _LOGGER.debug("Update already in progress, skipping this update")
             return
 
         # Acquire lock for the actual update work
@@ -467,17 +338,12 @@ class PajGPSData:
             if (time.time() - self.last_update) < self.data_ttl and not forced:
                 return
 
-            # Check if the Internet connection is available by pinging the API URL with a HEAD request
-            try:
-                session = await self._get_session()
-                async with session.head("https://connect.paj-gps.de", timeout=REQUEST_TIMEOUT) as response:
-                    if response.status != 200:
-                        _LOGGER.warning(f"API URL is not reachable (status {response.status}). Skipping update.")
-                        # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
-                        self.last_update = time.time() + 60
-                        return  # Skip update if API is not reachable
-            except (asyncio.TimeoutError, TimeoutError):
-                _LOGGER.warning(f"Timeout while checking API URL. Skipping update.")
+            # Update last update time BEFORE starting work to prevent parallel executions
+            self.last_update = time.time()
+
+            # Check if the API is available
+            if not await check_pajgps_availability():
+                _LOGGER.warning("API is not reachable, skipping update")
                 # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
                 self.last_update = time.time() + 60
                 return
@@ -485,29 +351,29 @@ class PajGPSData:
             # Start timing the full update
             update_start_time = time.perf_counter()
 
-            # Update last update time BEFORE starting work to prevent parallel executions
-            self.last_update = time.time()
-
             # Check if we need to refresh token
             await self.refresh_token()
 
-            # Fetch the new data from the API in parallel
+            # First, update devices data (required for other updates)
+            await self.update_devices_data()
+
+            # Then fetch the rest of the data in parallel (they depend on devices list)
             await asyncio.gather(
-                self.update_devices_data(),
                 self.update_position_data(),
                 self.update_alerts_data(),
                 self.update_sensors_data()
             )
 
-            self.last_update = time.time()
 
             # Calculate total update time in milliseconds
             total_duration_ms = (time.perf_counter() - update_start_time) * 1000
             self.total_update_time_ms = total_duration_ms
 
             # Update the total_update_time_ms for all sensor data
-            for sensor in self.sensors:
-                sensor.total_update_time_ms = total_duration_ms
+            # Sanity check: ignore values less than zero or greater than 30 seconds
+            if 0 < total_duration_ms < 30000:
+                for sensor in self.sensors:
+                    sensor.total_update_time_ms = total_duration_ms
 
 
     def get_device(self, device_id: int) -> PajGPSDevice | None:
@@ -573,45 +439,61 @@ class PajGPSData:
         }
         headers = self.get_standard_headers()
         try:
-            json = await self.make_post_request(url, headers, payload=payload)
-            self.positions_json = json
-            new_positions = [
-                PajGPSPositionData(
-                    device["iddevice"],
-                    device["lat"],
-                    device["lng"],
-                    device["direction"],
-                    device["speed"],
-                    device["battery"]
-                ) for device in json["success"]
-            ]
-            if self.fetch_elevation:
-                # Get new positions that have lat and lng different from old positions for same device
-                moved_device_ids = []
-                for new_position in new_positions:
-                    old_position = self.get_position(new_position.device_id)
-                    if old_position is not None:
-                        if (old_position.lat != new_position.lat) or (old_position.lng != new_position.lng) or new_position.elevation is None:
-                            moved_device_ids.append(new_position.device_id)
-
-                # Update elevation for moved devices in background
-                for device_id in moved_device_ids:
-                    # Check if there was an update in the last 5 minutes
-                    if time.time() - self.get_position(device_id).last_elevation_update > 60 * 5:
-                        task = asyncio.create_task(self.update_elevation(device_id))
-                        self._background_tasks.add(task)
-                        task.add_done_callback(self._background_tasks.discard)
-                        self.get_position(device_id).last_elevation_update = time.time()
-
-            self.positions = new_positions
+            json = await make_request("POST", url, headers, payload=payload)
+        except ApiResponseError as e:
+            raise ApiError(e.error_json)
         except ApiError as e:
-            _LOGGER.error(f"Error while getting tracking data: {e.error}")
+            _LOGGER.error("Error while getting tracking data: %s", e.error)
             self.positions = []
+            return
         except TimeoutError as e:
-            _LOGGER.warning("Timeout while getting tracking data.")
-        except Exception as e:
-            _LOGGER.error(f"Error updating position data: {e}")
+            _LOGGER.warning("Timeout while getting tracking data")
             self.positions = []
+            return
+        except KeyError as e:
+            _LOGGER.error("Missing key in tracking data response: %s", e)
+            self.positions = []
+            return
+
+        self.positions_json = json
+
+        if "success" not in json:
+            _LOGGER.error("Unexpected response format in tracking data: %s", json)
+            self.positions = []
+            return
+
+        new_positions = [
+            PajGPSPositionData(
+                device["iddevice"],
+                device["lat"],
+                device["lng"],
+                device["direction"],
+                device["speed"],
+                device["battery"]
+            ) for device in json["success"]
+        ]
+
+
+        if self.fetch_elevation:
+            # Get new positions that have lat and lng different from old positions for same device
+            moved_device_ids = []
+            for new_position in new_positions:
+                old_position = self.get_position(new_position.device_id)
+                if old_position is not None:
+                    if (old_position.lat != new_position.lat) or (old_position.lng != new_position.lng) or new_position.elevation is None:
+                        moved_device_ids.append(new_position.device_id)
+
+            # Update elevation for moved devices in background
+            for device_id in moved_device_ids:
+                # Check if there was an update in the last 5 minutes
+                if time.time() - self.get_position(device_id).last_elevation_update > 60 * 5:
+                    task = asyncio.create_task(self.update_elevation(device_id))
+                    self._background_tasks.add(task)
+                    task.add_done_callback(self._background_tasks.discard)
+                    self.get_position(device_id).last_elevation_update = time.time()
+
+        self.positions = new_positions
+
 
     async def update_elevation(self, device_id: int) -> None:
         """
@@ -635,35 +517,38 @@ class PajGPSData:
             'latitude': position.lat,
             'longitude': position.lng
         }
+        json = None
         try:
-            json = await self.make_get_request(url, headers, params=params)
-            if json and "elevation" in json:
-                position.elevation = json["elevation"][0]
-            else:
-                _LOGGER.warning(
-                    f"Unexpected elevation response format for device {device_id} "
-                    f"at ({position.lat}, {position.lng}): {json}"
-                )
-                position.elevation = None
+            json = await make_request("GET", url, headers, params=params)
         except TimeoutError:
             _LOGGER.warning(
-                f"Timeout while getting elevation data for device {device_id} "
-                f"at ({position.lat}, {position.lng}) from Open-Meteo API"
+                "Timeout while getting elevation data for device %s at (%s, %s) from Open-Meteo API",
+                device_id, position.lat, position.lng
             )
             position.elevation = None
         except ValueError as e:
             # Content-type mismatch or HTTP error
             _LOGGER.warning(
-                f"Failed to get elevation for device {device_id} "
-                f"at ({position.lat}, {position.lng}): {e}"
+                "Failed to get elevation for device %s at (%s, %s): %s",
+                device_id, position.lat, position.lng, e
             )
             position.elevation = None
         except Exception as e:
             _LOGGER.error(
-                f"Unexpected error while getting elevation for device {device_id} "
-                f"at ({position.lat}, {position.lng}): {type(e).__name__}: {e}"
+                "Unexpected error while getting elevation for device %s at (%s, %s): %s: %s",
+                device_id, position.lat, position.lng, type(e).__name__, e
             )
             position.elevation = None
+
+        if json and "elevation" in json:
+            position.elevation = json["elevation"][0]
+        else:
+            _LOGGER.warning(
+                "Unexpected elevation response format for device %s at (%s, %s): %s",
+                device_id, position.lat, position.lng, json
+            )
+            position.elevation = None
+
 
 
     async def update_alerts_data(self) -> None:
@@ -679,28 +564,29 @@ class PajGPSData:
             'isRead': 0
         }
         headers = self.get_standard_headers()
+        json = None
         try:
-            json = await self.make_get_request(url, headers, params=params)
+            json = await make_request("GET", url, headers, params=params)
             self.alerts_json = json
+        except ApiError as e:
+            _LOGGER.error("Error while getting alerts data: %s", e.error)
+            self.alerts = []
+        except TimeoutError as e:
+            _LOGGER.warning("Timeout while getting alerts data")
+
+        if json:
             new_alerts = [
                 PajGPSAlert(alert["iddevice"], alert["meldungtyp"])
                 for alert in json["success"]
             ]
             self.alerts = new_alerts
 
-            if self.mark_alerts_as_read:
-                alert_ids = [alert.alert_type for alert in new_alerts]
-                task = asyncio.create_task(self.consume_alerts(alert_ids))
-                self._background_tasks.add(task)
-                task.add_done_callback(self._background_tasks.discard)
-        except ApiError as e:
-            _LOGGER.error(f"Error while getting alerts data: {e.error}")
-            self.alerts = []
-        except TimeoutError as e:
-            _LOGGER.warning("Timeout while getting alerts data.")
-        except Exception as e:
-            _LOGGER.error(f"Error updating alerts: {e}")
-            self.alerts = []
+        if self.mark_alerts_as_read:
+            alert_ids = [alert.alert_type for alert in new_alerts]
+            task = asyncio.create_task(self.consume_alerts(alert_ids))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+
 
     async def update_devices_data(self) -> None:
         """
@@ -712,10 +598,18 @@ class PajGPSData:
         """
         url = API_URL + "device"
         headers = self.get_standard_headers()
+        json = None
         try:
-            json = await self.make_get_request(url, headers)
+            json = await make_request("GET", url, headers)
             self.devices_json = json
-            new_devices = []
+        except ApiError as e:
+            _LOGGER.error("Error while getting devices data: %s", e.error)
+            self.devices = []
+        except TimeoutError as e:
+            _LOGGER.warning("Timeout while getting devices data")
+
+        new_devices = []
+        if json:
             for device in json["success"]:
                 device_data = PajGPSDevice(device["id"])
                 device_data.name = device["name"]
@@ -739,15 +633,7 @@ class PajGPSData:
                 device_data.alarm_ignition_enabled = device["alarmzuendalarm"] == 1
                 device_data.alarm_drop_enabled = device["alarm_fall_enabled"] == 1
                 new_devices.append(device_data)
-            self.devices = new_devices
-        except ApiError as e:
-            _LOGGER.error(f"Error while getting devices data: {e.error}")
-            self.devices = []
-        except TimeoutError as e:
-            _LOGGER.warning("Timeout while getting devices data.")
-        except Exception as e:
-            _LOGGER.error(f"Error while updating Paj GPS devices: {e}")
-            self.devices = []
+        self.devices = new_devices
 
 
     async def update_sensors_data(self) -> None:
@@ -785,24 +671,26 @@ class PajGPSData:
             url = API_URL + f"sensordata/last/{device.id}"
             sensor_data = PajGPSSensorData()
             sensor_data.device_id = device.id
+            json = None
 
             try:
-                json = await self.make_get_request(url, headers)
-                if "success" in json and "volt" in json["success"]:
-                    # Convert from millivolts to volts and round to 1 decimal place
-                    sensor_data.voltage = round(json["success"]["volt"] / 1000, 1)
-                else:
-                    _LOGGER.debug(f"No sensor data for device {device.id}")
-                    sensor_data.voltage = 0.0
+                json = await make_request("GET", url, headers)
+            except ApiResponseError as e:
+                raise ApiError(e.error_json)
             except ApiError as e:
-                _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e.error}")
+                _LOGGER.error("Error while getting sensor data for device %s: %s", device.id, e.error)
                 sensor_data.voltage = 0.0
             except TimeoutError as e:
-                _LOGGER.warning(f"Timeout while getting sensor data for device {device.id}.")
+                _LOGGER.warning("Timeout while getting sensor data for device %s", device.id)
                 sensor_data.voltage = 0.0
-            except Exception as e:
-                _LOGGER.error(f"Error while getting sensor data for device {device.id}: {e}")
+
+            if json and "success" in json and "volt" in json["success"]:
+                # Convert from millivolts to volts and round to 1 decimal place
+                sensor_data.voltage = round(json["success"]["volt"] / 1000, 1)
+            else:
+                _LOGGER.debug("No sensor data for device %s", device.id)
                 sensor_data.voltage = 0.0
+
 
 
             new_sensors.append(sensor_data)
@@ -825,14 +713,14 @@ class PajGPSData:
                 'isRead': 1
             }
             try:
-                await self.make_put_request(url, headers, params=params)
-                _LOGGER.debug(f"Alert {alert_id} marked as read.")
+                await make_request("PUT", url, headers, params=params)
+                _LOGGER.debug("Alert %s marked as read", alert_id)
+            except ApiResponseError as e:
+                raise ApiError(e.error_json)
             except ApiError as e:
-                _LOGGER.error(f"Error while marking alert {alert_id} as read: {e.error}")
+                _LOGGER.error("Error while marking alert %s as read: %s", alert_id, e.error)
             except TimeoutError as e:
-                _LOGGER.warning("Timeout while marking alerts as read.")
-            except Exception as e:
-                _LOGGER.error(f"Error while marking alerts as read: {e}")
+                _LOGGER.warning("Timeout while marking alerts as read")
 
     async def change_alert_state(self, device_id: int, alert_type: int, state: bool) -> None:
         """
@@ -876,13 +764,13 @@ class PajGPSData:
             device.alarm_voltage_enabled = state
 
         else:
-            _LOGGER.error(f"Unknown alert type: {alert_type}")
+            _LOGGER.error("Unknown alert type: %s", alert_type)
             return
 
         # Change the alert state in PajGPSData
         device = self.get_device(device_id)
         if device is None:
-            _LOGGER.error(f"Device not found: {device_id}")
+            _LOGGER.error("Device not found: %s", device_id)
             return
 
         url = API_URL + "device/" + str(device_id)
@@ -891,11 +779,11 @@ class PajGPSData:
             alert_name: state_int
         }
         try:
-            await self.make_put_request(url, headers, params=params)
-            _LOGGER.debug(f"Alert {alert_name} for device {device_id} set to {state_int}.")
+            await make_request("PUT", url, headers, params=params)
+            _LOGGER.debug("Alert %s for device %s set to %s", alert_name, device_id, state_int)
+        except ApiResponseError as e:
+            raise ApiError(e.error_json)
         except ApiError as e:
-            _LOGGER.error(f"Error while changing alert state: {e.error}")
+            _LOGGER.error("Error while changing alert state: %s", e.error)
         except TimeoutError as e:
-            _LOGGER.warning("Timeout while changing alert state.")
-        except Exception as e:
-            _LOGGER.error(f"Error while changing alert state: {e}")
+            _LOGGER.warning("Timeout while changing alert state")

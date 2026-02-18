@@ -73,7 +73,7 @@ class PajGPSPositionSensor(TrackerEntity):
 
     async def async_update(self) -> None:
         """Update the GPS sensor data."""
-        await self._pajgps_data.async_update()
+        await self._pajgps_data.update_pajgps_data()
         position_data = self._pajgps_data.get_position(self._device_id)
         if position_data is not None:
             if position_data.lat is not None and position_data.lng is not None:
@@ -113,7 +113,7 @@ async def async_setup_entry(
     pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
 
     # Update the data
-    await pajgps_data.async_update()
+    await pajgps_data.update_pajgps_data()
 
     # Add the Paj GPS position sensors to the entity registry
     devices = pajgps_data.get_device_ids()

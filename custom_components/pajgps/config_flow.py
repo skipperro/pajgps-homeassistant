@@ -138,7 +138,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
 
                 await paj_data.refresh_token(True)
-                await paj_data.async_update(True)
+                await paj_data.update_pajgps_data(True)
 
                 # Rename the entry in the UI
                 self.hass.config_entries.async_update_entry(

@@ -40,7 +40,7 @@ class PajGPSVoltageSensor(SensorEntity):
     async def async_update(self) -> None:
         """Update the sensor state."""
         try:
-            await self._pajgps_data.async_update()
+            await self._pajgps_data.update_pajgps_data()
             sensor_data = self._pajgps_data.get_sensors(self._device_id)
             if sensor_data is not None:
                 if sensor_data.voltage is not None:
@@ -107,7 +107,7 @@ class PajGPSBatterySensor(SensorEntity):
     async def async_update(self) -> None:
         """Update the sensor state."""
         try:
-            await self._pajgps_data.async_update()
+            await self._pajgps_data.update_pajgps_data()
             position_data = self._pajgps_data.get_position(self._device_id)
             if position_data is not None:
                 if position_data.battery is not None:
@@ -205,7 +205,7 @@ class PajGPSSpeedSensor(SensorEntity):
     async def async_update(self) -> None:
         """Update the sensor state."""
         try:
-            await self._pajgps_data.async_update()
+            await self._pajgps_data.update_pajgps_data()
             position_data = self._pajgps_data.get_position(self._device_id)
             if position_data is not None:
                 if position_data.speed is not None:
@@ -273,7 +273,7 @@ class PajGPSElevationSensor(SensorEntity):
     async def async_update(self) -> None:
         """Update the sensor state."""
         try:
-            await self._pajgps_data.async_update()
+            await self._pajgps_data.update_pajgps_data()
             position_data = self._pajgps_data.get_position(self._device_id)
             if position_data is not None:
                 if position_data.elevation is not None:
@@ -343,7 +343,7 @@ class PajGPSTotalUpdateTimeSensor(SensorEntity):
     async def async_update(self) -> None:
         """Update the sensor state."""
         try:
-            await self._pajgps_data.async_update()
+            await self._pajgps_data.update_pajgps_data()
             sensor_data = self._pajgps_data.get_sensors(self._device_id)
             if sensor_data is not None:
                 self._total_update_time = sensor_data.total_update_time_ms
@@ -408,7 +408,7 @@ async def async_setup_entry(
     pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
 
     # Update the data
-    await pajgps_data.async_update()
+    await pajgps_data.update_pajgps_data()
 
     # Add the Paj GPS sensors to the entity registry
     devices = pajgps_data.get_device_ids()

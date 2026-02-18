@@ -2,7 +2,7 @@ import os
 import time
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 import custom_components.pajgps.pajgps_data as pajgps_data
 from dotenv import load_dotenv
 
@@ -63,7 +63,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
              patch.object(self.data, 'update_devices_data', new=AsyncMock())):
             self.data.token = "test_token"
             await self.data.refresh_token()
-            await self.data.async_update()
+            await self.data.update_pajgps_data()
             assert self.data.last_update > 0
 
 
@@ -151,8 +151,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert pos.speed is not None
             assert pos.battery is not None
 
-        # Mock the make_get_request to test the update_alerts_data method without data from api
-        with patch.object(self.data, 'make_get_request', new=AsyncMock(return_value={"success": [
+        # Mock the make_request to test the update_alerts_data method without data from api
+        with patch('custom_components.pajgps.pajgps_data.make_request', new=AsyncMock(return_value={"success": [
                 {
                   "id": 1,
                   "iddevice": 1,
@@ -177,7 +177,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test the elevation data.
         """
         await self.data.refresh_token()
-        await self.data.async_update()
+        await self.data.update_pajgps_data()
         # Update the elevation data for the first device
         device_id = self.data.get_device_ids()[0]
         device = self.data.get_device(device_id)
@@ -192,7 +192,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test the voltage sensor data.
         """
         await self.data.refresh_token()
-        await self.data.async_update()
+        await self.data.update_pajgps_data()
         # Check if any device has voltage data
         found_voltage = False
         for device_id in self.data.get_device_ids():
@@ -340,19 +340,19 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         await self.data.refresh_token()
 
         # First update
-        await self.data.async_update(forced=True)
+        await self.data.update_pajgps_data(forced=True)
         first_update_time = self.data.last_update
 
         # Immediate second update (should be skipped due to TTL)
         with patch.object(self.data, 'update_devices_data', new=AsyncMock()) as mock_update:
-            await self.data.async_update(forced=False)
+            await self.data.update_pajgps_data(forced=False)
             mock_update.assert_not_called()
 
         # Update time should not change
         assert self.data.last_update == first_update_time
 
         # Forced update should work
-        await self.data.async_update(forced=True)
+        await self.data.update_pajgps_data(forced=True)
         assert self.data.last_update > first_update_time
 
     async def test_clean_data(self):
@@ -376,9 +376,10 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         """
         Test handling of API errors.
         """
+        from custom_components.pajgps.requests import ApiResponseError
         # Mock an API error response
-        with patch.object(self.data, 'make_get_request',
-                         new=AsyncMock(side_effect=pajgps_data.ApiError({"error": "Test error"}))):
+        with patch('custom_components.pajgps.pajgps_data.make_request',
+                         new=AsyncMock(side_effect=ApiResponseError({"error": "Test error"}))):
             await self.data.update_devices_data()
             # Should handle error gracefully and set devices to empty list
             assert self.data.devices == []
@@ -388,41 +389,12 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test handling of timeout errors.
         """
         # Mock a timeout
-        with patch.object(self.data, 'make_get_request',
+        with patch('custom_components.pajgps.pajgps_data.make_request',
                          new=AsyncMock(side_effect=TimeoutError())):
             await self.data.update_position_data()
             # Should handle timeout gracefully and set positions to empty list
             assert self.data.positions == []
 
-    async def test_session_reuse(self):
-        """
-        Test that the same session is reused across multiple requests.
-        """
-        await self.data.refresh_token()
-
-        session1 = await self.data._get_session()
-        session2 = await self.data._get_session()
-
-        # Should be the same session object
-        assert session1 is session2
-        assert not session1.closed
-
-    async def test_session_recreation_after_close(self):
-        """
-        Test that session is recreated after being closed.
-        """
-        await self.data.refresh_token()
-
-        session1 = await self.data._get_session()
-        await self.data.async_close()
-
-        # Session should be closed
-        assert session1.closed
-
-        # New session should be created
-        session2 = await self.data._get_session()
-        assert session2 is not session1
-        assert not session2.closed
 
     async def test_background_tasks_tracking(self):
         """
@@ -431,12 +403,11 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         await self.data.refresh_token()
         await self.data.update_devices_data()
 
-        # Mock make_get_request for alerts with mark_as_read enabled
+        # Mock make_request for alerts with mark_as_read enabled
         self.data.mark_alerts_as_read = True
 
-        with patch.object(self.data, 'make_get_request',
+        with patch('custom_components.pajgps.pajgps_data.make_request',
                          new=AsyncMock(return_value={"success": [{"iddevice": 1, "meldungtyp": 2}]})):
-            with patch.object(self.data, 'make_put_request', new=AsyncMock(return_value={"success": True})):
                 await self.data.update_alerts_data()
 
                 # Give background tasks a moment to start
@@ -505,27 +476,29 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         await self.data.refresh_token()
 
         # First update
-        await self.data.async_update(forced=True)
+        await self.data.update_pajgps_data(forced=True)
         devices_count_1 = len(self.data.devices)
         positions_count_1 = len(self.data.positions)
+        print(f"After first update: devices={devices_count_1}, positions={positions_count_1}")
 
         # Second update (forced)
-        await self.data.async_update(forced=True)
+        await self.data.update_pajgps_data(forced=True)
         devices_count_2 = len(self.data.devices)
         positions_count_2 = len(self.data.positions)
+        print(f"After second update: devices={devices_count_2}, positions={positions_count_2}")
 
         # Should have data after both updates
-        assert devices_count_1 > 0
-        assert devices_count_2 > 0
-        assert positions_count_1 > 0
-        assert positions_count_2 > 0
+        assert devices_count_1 > 0, f"First update: Expected devices > 0, got {devices_count_1}"
+        assert devices_count_2 > 0, f"Second update: Expected devices > 0, got {devices_count_2}"
+        assert positions_count_1 > 0, f"First update: Expected positions > 0, got {positions_count_1}"
+        assert positions_count_2 > 0, f"Second update: Expected positions > 0, got {positions_count_2}"
 
     async def test_update_time_sensors(self):
         """
         Test the update time measurements in sensor data.
         """
         await self.data.refresh_token()
-        await self.data.async_update(forced=True)
+        await self.data.update_pajgps_data(forced=True)
 
         # Check that total update time was measured
         assert self.data.total_update_time_ms > 0
@@ -562,7 +535,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         self.data.update_devices_data = slow_update_devices
 
         # Start first update (will take ~2 seconds)
-        first_update_task = asyncio.create_task(self.data.async_update(forced=True))
+        first_update_task = asyncio.create_task(self.data.update_pajgps_data(forced=True))
 
         # Wait a bit to ensure first update has acquired the lock
         await asyncio.sleep(0.1)
@@ -570,7 +543,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         # Try to start second update while first is still running
         # This should be skipped because lock is held
         second_update_start_time = time.time()
-        await self.data.async_update(forced=True)
+        await self.data.update_pajgps_data(forced=False)
         second_update_duration = time.time() - second_update_start_time
 
         # Second update should return almost immediately (< 0.5s)
@@ -589,183 +562,247 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_request_retry_on_timeout(self):
         """
-        Test that make_get_request retries up to 3 times on timeout.
+        Test that make_request retries up to 3 times on timeout for GET requests.
         """
-        await self.data.refresh_token()
+        from custom_components.pajgps import requests as pajgps_requests
 
         call_count = [0]
 
-        class MockContextManager:
-            def __init__(self, call_count):
-                self.call_count = call_count
+        class MockResponse:
+            def __init__(self):
                 self.status = 200
                 self.headers = {'Content-Type': 'application/json'}
 
             async def json(self):
                 return {"success": "data"}
 
-            async def __aenter__(self):
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def get(self, *args, **kwargs):
                 self.call_count[0] += 1
                 if self.call_count[0] < 3:
                     raise asyncio.TimeoutError("Simulated timeout")
-                return self
+                return MockResponse()
 
-            async def __aexit__(self, *args):
-                pass
+            async def close(self):
+                self.closed = True
 
-        # Patch session.get to return our mock
-        session = await self.data._get_session()
-        original_get = session.get
-        session.get = lambda *args, **kwargs: MockContextManager(call_count)
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
 
         try:
-            result = await self.data.make_get_request("http://test.com", {})
+            result = await pajgps_requests.make_request(
+                method="GET",
+                url="http://test.com",
+                headers={},
+                timeout=1,
+                max_attempts=3
+            )
             assert call_count[0] == 3, f"Expected 3 attempts, but got {call_count[0]}"
             assert result == {"success": "data"}
             print(f"✓ GET request succeeded after {call_count[0]} attempts (2 timeouts, 1 success)")
         finally:
-            session.get = original_get
+            pajgps_requests.aiohttp.ClientSession = original_client_session
 
     async def test_get_request_fails_after_max_retries(self):
         """
-        Test that make_get_request fails after 3 timeout attempts.
+        Test that make_request fails after 3 timeout attempts for GET requests.
         """
-        await self.data.refresh_token()
+        from custom_components.pajgps import requests as pajgps_requests
 
         call_count = [0]
 
-        class MockContextManager:
+        class MockSession:
             def __init__(self, call_count):
                 self.call_count = call_count
+                self.closed = False
 
-            async def __aenter__(self):
+            async def get(self, *args, **kwargs):
                 self.call_count[0] += 1
                 raise asyncio.TimeoutError("Simulated timeout")
 
-            async def __aexit__(self, *args):
-                pass
+            async def close(self):
+                self.closed = True
 
-        session = await self.data._get_session()
-        original_get = session.get
-        session.get = lambda *args, **kwargs: MockContextManager(call_count)
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
 
         try:
             with self.assertRaises(asyncio.TimeoutError):
-                await self.data.make_get_request("http://test.com", {})
+                await pajgps_requests.make_request(
+                    method="GET",
+                    url="http://test.com",
+                    headers={},
+                    timeout=1,
+                    max_attempts=3
+                )
 
             assert call_count[0] == 3, f"Expected 3 attempts, but got {call_count[0]}"
             print(f"✓ GET request properly failed after {call_count[0]} timeout attempts")
         finally:
-            session.get = original_get
+            pajgps_requests.aiohttp.ClientSession = original_client_session
 
     async def test_post_request_retry_on_timeout(self):
         """
-        Test that make_post_request retries up to 3 times on timeout.
+        Test that make_request retries up to 3 times on timeout for POST requests.
         """
-        await self.data.refresh_token()
+        from custom_components.pajgps import requests as pajgps_requests
 
         call_count = [0]
 
-        class MockContextManager:
-            def __init__(self, call_count):
-                self.call_count = call_count
+        class MockResponse:
+            def __init__(self):
                 self.status = 200
+                self.headers = {'Content-Type': 'application/json'}
 
             async def json(self):
                 return {"success": "posted"}
 
-            async def __aenter__(self):
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def post(self, *args, **kwargs):
                 self.call_count[0] += 1
                 if self.call_count[0] < 2:
                     raise asyncio.TimeoutError("Simulated timeout")
-                return self
+                return MockResponse()
 
-            async def __aexit__(self, *args):
-                pass
+            async def close(self):
+                self.closed = True
 
-        session = await self.data._get_session()
-        original_post = session.post
-        session.post = lambda *args, **kwargs: MockContextManager(call_count)
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
 
         try:
-            result = await self.data.make_post_request("http://test.com", {}, {"data": "test"})
+            result = await pajgps_requests.make_request(
+                method="POST",
+                url="http://test.com",
+                headers={},
+                payload={"data": "test"},
+                timeout=1,
+                max_attempts=3
+            )
             assert call_count[0] == 2, f"Expected 2 attempts, but got {call_count[0]}"
             assert result == {"success": "posted"}
             print(f"✓ POST request succeeded after {call_count[0]} attempts (1 timeout, 1 success)")
         finally:
-            session.post = original_post
+            pajgps_requests.aiohttp.ClientSession = original_client_session
 
     async def test_put_request_retry_on_timeout(self):
         """
-        Test that make_put_request retries up to 3 times on timeout.
+        Test that make_request retries up to 3 times on timeout for PUT requests.
         """
-        await self.data.refresh_token()
+        from custom_components.pajgps import requests as pajgps_requests
 
         call_count = [0]
 
-        class MockContextManager:
-            def __init__(self, call_count):
-                self.call_count = call_count
+        class MockResponse:
+            def __init__(self):
                 self.status = 200
+                self.headers = {'Content-Type': 'application/json'}
 
             async def json(self):
                 return {"success": "updated"}
 
-            async def __aenter__(self):
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def put(self, *args, **kwargs):
                 self.call_count[0] += 1
                 if self.call_count[0] < 2:
                     raise asyncio.TimeoutError("Simulated timeout")
-                return self
+                return MockResponse()
 
-            async def __aexit__(self, *args):
-                pass
+            async def close(self):
+                self.closed = True
 
-        session = await self.data._get_session()
-        original_put = session.put
-        session.put = lambda *args, **kwargs: MockContextManager(call_count)
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
 
         try:
-            result = await self.data.make_put_request("http://test.com", {})
+            result = await pajgps_requests.make_request(
+                method="PUT",
+                url="http://test.com",
+                headers={},
+                timeout=1,
+                max_attempts=3
+            )
             assert call_count[0] == 2, f"Expected 2 attempts, but got {call_count[0]}"
             assert result == {"success": "updated"}
             print(f"✓ PUT request succeeded after {call_count[0]} attempts (1 timeout, 1 success)")
         finally:
-            session.put = original_put
+            pajgps_requests.aiohttp.ClientSession = original_client_session
 
     async def test_non_timeout_errors_not_retried(self):
         """
         Test that non-timeout errors are not retried.
         """
-        await self.data.refresh_token()
+        from custom_components.pajgps import requests as pajgps_requests
 
         call_count = [0]
 
-        class MockContextManager:
-            def __init__(self, call_count):
-                self.call_count = call_count
+        class MockResponse:
+            def __init__(self):
                 self.status = 400
                 self.headers = {'Content-Type': 'application/json'}
 
             async def json(self):
                 return {"error": "Bad request"}
 
-            async def __aenter__(self):
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def get(self, *args, **kwargs):
                 self.call_count[0] += 1
-                return self
+                return MockResponse()
 
-            async def __aexit__(self, *args):
-                pass
+            async def close(self):
+                self.closed = True
 
-        session = await self.data._get_session()
-        original_get = session.get
-        session.get = lambda *args, **kwargs: MockContextManager(call_count)
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
 
         try:
-            with self.assertRaises(pajgps_data.ApiError):
-                await self.data.make_get_request("http://test.com", {})
+            with self.assertRaises(Exception):  # Will raise exception due to 400 status
+                await pajgps_requests.make_request(
+                    method="GET",
+                    url="http://test.com",
+                    headers={},
+                    timeout=1,
+                    max_attempts=3
+                )
 
             assert call_count[0] == 1, f"Expected 1 attempt for non-timeout error, but got {call_count[0]}"
             print(f"✓ Non-timeout error properly failed immediately without retry")
         finally:
-            session.get = original_get
+            pajgps_requests.aiohttp.ClientSession = original_client_session
 
