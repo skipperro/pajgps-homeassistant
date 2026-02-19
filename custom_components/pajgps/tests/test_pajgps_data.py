@@ -4,6 +4,9 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 import custom_components.pajgps.pajgps_data as pajgps_data
+from custom_components.pajgps.api.auth import get_login_token
+from custom_components.pajgps.api.positions import fetch_elevation
+from custom_components.pajgps.models import PajGPSAlert, PajGPSDevice, PajGPSPositionData
 from dotenv import load_dotenv
 
 class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
@@ -38,7 +41,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         if self.data.email is None or self.data.password is None:
             return
         # Test login with valid credentials
-        token = await self.data.get_login_token()
+        token = await get_login_token(self.data.email, self.data.password)
         assert token is not None
         # Test if login token is valid bearer header
         if token is not None:
@@ -48,7 +51,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         """
         Test the refresh_token method.
         """
-        with patch.object(self.data, 'get_login_token', new=AsyncMock(return_value="new_token")):
+        with patch('custom_components.pajgps.api.auth.refresh_token',
+                   new=AsyncMock(return_value=("new_token", time.time()))):
             self.data.token = None
             await self.data.refresh_token()
             assert self.data.token == "new_token"
@@ -82,9 +86,11 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         """
         self.data.token = "valid_token"
         self.data.last_token_update = time.time()
-        with patch.object(self.data, 'get_login_token', new=AsyncMock()) as mock_get_login_token:
+        with patch('custom_components.pajgps.api.auth.refresh_token',
+                   new=AsyncMock(return_value=("valid_token", self.data.last_token_update))) as mock_refresh:
             await self.data.refresh_token()
-            mock_get_login_token.assert_not_called()
+            mock_refresh.assert_called_once()
+            assert self.data.token == "valid_token"
 
     async def test_two_instances(self):
         """
@@ -152,7 +158,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert pos.battery is not None
 
         # Mock the make_request to test the update_alerts_data method without data from api
-        with patch('custom_components.pajgps.pajgps_data.make_request', new=AsyncMock(return_value={"success": [
+        with patch('custom_components.pajgps.api.alerts.make_request', new=AsyncMock(return_value={"success": [
                 {
                   "id": 1,
                   "iddevice": 1,
@@ -182,9 +188,10 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         device_id = self.data.get_device_ids()[0]
         device = self.data.get_device(device_id)
         assert device is not None
-        await self.data.update_elevation(device_id)
         position = self.data.get_position(device_id)
         assert position is not None
+        elevation = await fetch_elevation(device_id, position)
+        position.elevation = elevation
         assert position.elevation is not None
 
     async def test_voltage_sensor(self):
@@ -219,7 +226,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
 
         # If there are alerts, check their structure
         for alert in self.data.alerts:
-            assert isinstance(alert, pajgps_data.PajGPSAlert)
+            assert isinstance(alert, PajGPSAlert)
             assert alert.device_id is not None
             assert alert.alert_type is not None
             assert alert.alert_type in [1, 2, 4, 5, 6, 7, 9, 13]  # Valid alert types
@@ -236,9 +243,9 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
 
             # Mock alerts for testing
             self.data.alerts = [
-                pajgps_data.PajGPSAlert(device_id, 2),
-                pajgps_data.PajGPSAlert(device_id, 4),
-                pajgps_data.PajGPSAlert(999999, 5),  # Different device
+                PajGPSAlert(device_id, 2),
+                PajGPSAlert(device_id, 4),
+                PajGPSAlert(999999, 5),  # Different device
             ]
 
             device_alerts = self.data.get_alerts(device_id)
@@ -378,7 +385,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         """
         from custom_components.pajgps.requests import ApiResponseError
         # Mock an API error response
-        with patch('custom_components.pajgps.pajgps_data.make_request',
+        with patch('custom_components.pajgps.api.devices.make_request',
                          new=AsyncMock(side_effect=ApiResponseError({"error": "Test error"}))):
             await self.data.update_devices_data()
             # Should handle error gracefully and set devices to empty list
@@ -389,7 +396,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test handling of timeout errors.
         """
         # Mock a timeout
-        with patch('custom_components.pajgps.pajgps_data.make_request',
+        with patch('custom_components.pajgps.api.positions.make_request',
                          new=AsyncMock(side_effect=TimeoutError())):
             await self.data.update_position_data()
             # Should handle timeout gracefully and set positions to empty list
@@ -406,7 +413,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         # Mock make_request for alerts with mark_as_read enabled
         self.data.mark_alerts_as_read = True
 
-        with patch('custom_components.pajgps.pajgps_data.make_request',
+        with patch('custom_components.pajgps.api.alerts.make_request',
                          new=AsyncMock(return_value={"success": [{"iddevice": 1, "meldungtyp": 2}]})):
                 await self.data.update_alerts_data()
 
@@ -431,7 +438,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         assert len(self.data.positions) > 0
 
         for position in self.data.positions:
-            assert isinstance(position, pajgps_data.PajGPSPositionData)
+            assert isinstance(position, PajGPSPositionData)
             assert isinstance(position.lat, (int, float))
             assert isinstance(position.lng, (int, float))
             assert isinstance(position.direction, int)
@@ -453,7 +460,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         assert len(self.data.devices) > 0
 
         for device in self.data.devices:
-            assert isinstance(device, pajgps_data.PajGPSDevice)
+            assert isinstance(device, PajGPSDevice)
             assert isinstance(device.id, int)
             assert isinstance(device.name, str)
             assert isinstance(device.imei, str)
