@@ -151,7 +151,9 @@ class PajGPSData:
             return
 
         async with self.update_lock:
-            if not await self._should_run_update(forced):
+            # Re-check TTL after acquiring the lock (without sleep or lock check)
+            # to discard updates that were queued while a previous update was running.
+            if not forced and (time.time() - self.last_update) < self.data_ttl:
                 return
 
             self.last_update = time.time()
