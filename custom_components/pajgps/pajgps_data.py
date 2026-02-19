@@ -289,6 +289,7 @@ class PajGPSData:
         if elevation is None:
             _LOGGER.warning("Failed to fetch elevation for device %s, keeping previous elevation if any", device_id)
             return
+        elevation = round(elevation)
         live = self.get_position(device_id)
         target = live if live is not None else position
         target.elevation = elevation
