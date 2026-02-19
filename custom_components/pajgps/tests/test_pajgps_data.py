@@ -177,7 +177,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test the elevation data.
         """
         await self.data.refresh_token()
-        await self.data.update_pajgps_data()
+        await self.data.update_pajgps_data(forced=True)
         # Update the elevation data for the first device
         device_id = self.data.get_device_ids()[0]
         device = self.data.get_device(device_id)
@@ -192,7 +192,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test the voltage sensor data.
         """
         await self.data.refresh_token()
-        await self.data.update_pajgps_data()
+        await self.data.update_pajgps_data(forced=True)
         # Check if any device has voltage data
         found_voltage = False
         for device_id in self.data.get_device_ids():

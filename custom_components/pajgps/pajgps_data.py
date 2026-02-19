@@ -315,65 +315,68 @@ class PajGPSData:
 
     async def update_pajgps_data(self, forced: bool = False) -> None:
         """
-        Update the data from the PajGPS API.
-        This method is called by the update coordinator.
-        It fetches the data from the API and updates the internal state.
-        Ensures only one update runs at a time per instance.
+        Orchestrate a full data refresh.
+        Skips if data is still fresh or an update is already in progress.
         """
-        # Quick check before attempting to acquire lock
-        if (time.time() - self.last_update) < self.data_ttl and not forced:
+        if not await self._should_run_update(forced):
             return
 
-        # Wait small, random time to avoid multiple updates at the same time
-        await asyncio.sleep(random.random())
-
-        # Skip if previous update is still running
-        if self.update_lock.locked():
-            _LOGGER.debug("Update already in progress, skipping this update")
-            return
-
-        # Acquire lock for the actual update work
         async with self.update_lock:
-            # Double-check after acquiring lock (time may have passed)
-            if (time.time() - self.last_update) < self.data_ttl and not forced:
+            if not await self._should_run_update(forced):
                 return
 
-            # Update last update time BEFORE starting work to prevent parallel executions
             self.last_update = time.time()
 
-            # Check if the API is available
-            if not await check_pajgps_availability():
-                _LOGGER.warning("API is not reachable, skipping update")
-                # Set last update date to 1 minute in the future to avoid multiple timeout warnings in a row
+            if not await self._is_infrastructure_ready():
+                # Delay next retry by 1 minute to avoid flooding warnings
                 self.last_update = time.time() + 60
                 return
 
-            # Start timing the full update
-            update_start_time = time.perf_counter()
+            await self._fetch_all_data()
 
-            # Check if we need to refresh token
-            await self.refresh_token()
+    async def _should_run_update(self, forced: bool) -> bool:
+        """Return True if enough time has passed since last update, or if the update is forced."""
+        if forced:
+            return True
+        if self.update_lock.locked():
+            _LOGGER.debug("Update already in progress, skipping this update")
+            return False
+        # Wait a small random delay to avoid thundering-herd when multiple sensors trigger at once
+        await asyncio.sleep(random.random())
+        return (time.time() - self.last_update) >= self.data_ttl
 
-            # First, update devices data (required for other updates)
-            await self.update_devices_data()
+    async def _is_infrastructure_ready(self) -> bool:
+        """Ensure the API is reachable and the auth token is valid."""
+        if not await check_pajgps_availability():
+            _LOGGER.warning("API is not reachable, skipping update")
+            return False
+        await self.refresh_token()
+        return True
 
-            # Then fetch the rest of the data in parallel (they depend on devices list)
-            await asyncio.gather(
-                self.update_position_data(),
-                self.update_alerts_data(),
-                self.update_sensors_data()
-            )
+    async def _fetch_all_data(self) -> None:
+        """Fetch all device data from the API and record the total duration."""
+        start = time.perf_counter()
 
+        # Devices must be fetched first — other calls depend on the device list
+        await self.update_devices_data()
 
-            # Calculate total update time in milliseconds
-            total_duration_ms = (time.perf_counter() - update_start_time) * 1000
-            self.total_update_time_ms = total_duration_ms
+        await asyncio.gather(
+            self.update_position_data(),
+            self.update_alerts_data(),
+            self.update_sensors_data(),
+        )
 
-            # Update the total_update_time_ms for all sensor data
-            # Sanity check: ignore values less than zero or greater than 30 seconds
-            if 0 < total_duration_ms < 30000:
-                for sensor in self.sensors:
-                    sensor.total_update_time_ms = total_duration_ms
+        self._record_update_duration(start)
+
+    def _record_update_duration(self, start: float) -> None:
+        """Persist the measured update duration on self and all sensor entries."""
+        duration_ms = (time.perf_counter() - start) * 1000
+        self.total_update_time_ms = duration_ms
+
+        # Sanity check: ignore values outside the 0–30 s range
+        if 0 < duration_ms < 30_000:
+            for sensor in self.sensors:
+                sensor.total_update_time_ms = duration_ms
 
 
     def get_device(self, device_id: int) -> PajGPSDevice | None:
@@ -581,11 +584,11 @@ class PajGPSData:
             ]
             self.alerts = new_alerts
 
-        if self.mark_alerts_as_read:
-            alert_ids = [alert.alert_type for alert in new_alerts]
-            task = asyncio.create_task(self.consume_alerts(alert_ids))
-            self._background_tasks.add(task)
-            task.add_done_callback(self._background_tasks.discard)
+            if self.mark_alerts_as_read:
+                alert_ids = [alert.alert_type for alert in new_alerts]
+                task = asyncio.create_task(self.consume_alerts(alert_ids))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
 
 
     async def update_devices_data(self) -> None:
@@ -602,11 +605,17 @@ class PajGPSData:
         try:
             json = await make_request("GET", url, headers)
             self.devices_json = json
+        except ApiResponseError as e:
+            _LOGGER.error("Error while getting devices data: %s", e)
+            self.devices = []
+            return
         except ApiError as e:
             _LOGGER.error("Error while getting devices data: %s", e.error)
             self.devices = []
-        except TimeoutError as e:
+            return
+        except TimeoutError:
             _LOGGER.warning("Timeout while getting devices data")
+            return
 
         new_devices = []
         if json:
