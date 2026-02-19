@@ -381,26 +381,28 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_api_error_handling(self):
         """
-        Test handling of API errors.
+        Test that stale device data is preserved when an API error occurs.
         """
         from custom_components.pajgps.requests import ApiResponseError
-        # Mock an API error response
+        # Pre-populate with some devices so we can verify they are NOT wiped
+        self.data.devices = [models.PajGPSDevice(1)]
         with patch('custom_components.pajgps.api.devices.make_request',
                          new=AsyncMock(side_effect=ApiResponseError({"error": "Test error"}))):
             await self.data.update_devices_data()
-            # Should handle error gracefully and set devices to empty list
-            assert self.data.devices == []
+            # Stale data should be preserved, not wiped
+            assert len(self.data.devices) == 1
 
     async def test_timeout_handling(self):
         """
-        Test handling of timeout errors.
+        Test that stale position data is preserved when a timeout occurs.
         """
-        # Mock a timeout
+        # Pre-populate with a position so we can verify it is NOT wiped
+        self.data.positions = [models.PajGPSPositionData(1, 52.0, 13.0, 0, 0, 100)]
         with patch('custom_components.pajgps.api.positions.make_request',
                          new=AsyncMock(side_effect=TimeoutError())):
             await self.data.update_position_data()
-            # Should handle timeout gracefully and set positions to empty list
-            assert self.data.positions == []
+            # Stale data should be preserved, not wiped
+            assert len(self.data.positions) == 1
 
 
     async def test_background_tasks_tracking(self):

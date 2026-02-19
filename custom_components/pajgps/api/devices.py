@@ -15,8 +15,11 @@ _LOGGER = logging.getLogger(__name__)
 API_URL = "https://connect.paj-gps.de/api/v1/"
 
 
-def _parse_device(device: dict) -> PajGPSDevice:
+def _parse_device(device: dict) -> PajGPSDevice | None:
     """Map a single raw API device dict onto a PajGPSDevice instance."""
+    if not device.get("device_models"):
+        _LOGGER.warning("Device %s has no device_models, skipping", device.get("id"))
+        return None
     model = device["device_models"][0]
     device_data = PajGPSDevice(device["id"])
     device_data.name = device["name"]
@@ -30,7 +33,7 @@ def _parse_device(device: dict) -> PajGPSDevice:
     device_data.has_alarm_speed = model["alarm_geschwindigkeit"] == 1
     device_data.has_alarm_power_cutoff = model["alarm_stromunterbrechung"] == 1
     device_data.has_alarm_ignition = model["alarm_zuendalarm"] == 1
-    device_data.has_alarm_drop = model["alarm_fall"] == 1
+    device_data.has_alarm_drop = model["alarm_drop"] == 1
     device_data.alarm_sos_enabled = device["alarmsos"] == 1
     device_data.alarm_shock_enabled = device["alarmbewegung"] == 1
     device_data.alarm_voltage_enabled = device["alarm_volt"] == 1
@@ -66,6 +69,6 @@ async def fetch_devices(headers: dict) -> tuple[list[PajGPSDevice], dict | None]
     if not raw_json or "success" not in raw_json:
         return [], raw_json
 
-    devices = [_parse_device(device) for device in raw_json["success"]]
-    return devices, raw_json
+    parsed = [_parse_device(device) for device in raw_json["success"]]
+    return [d for d in parsed if d is not None], raw_json
 

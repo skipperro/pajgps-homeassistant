@@ -258,8 +258,11 @@ class PajGPSData:
             self.get_device_ids(), self.get_standard_headers()
         )
 
-        if raw_json is not None:
-            self.positions_json = raw_json
+        if raw_json is None:
+            _LOGGER.warning("Keeping stale position data due to fetch error")
+            return
+
+        self.positions_json = raw_json
 
         if self.fetch_elevation:
             moved_ids = positions.find_moved_device_ids(new_positions, self.positions)
@@ -294,19 +297,28 @@ class PajGPSData:
         new_devices, raw_json = await devices.fetch_devices(self.get_standard_headers())
         if raw_json is not None:
             self.devices_json = raw_json
-        self.devices = new_devices
+        if new_devices:
+            self.devices = new_devices
+        elif raw_json is None:
+            _LOGGER.warning("Keeping stale device data due to fetch error")
 
     async def update_sensors_data(self) -> None:
         """Fetch sensor data for all known devices and update self.sensors."""
-        self.sensors = await sensors.fetch_sensors(self.devices, self.get_standard_headers())
+        new_sensors = await sensors.fetch_sensors(self.devices, self.get_standard_headers())
+        if new_sensors:
+            self.sensors = new_sensors
+        else:
+            _LOGGER.warning("Keeping stale sensor data due to fetch error")
 
     async def update_alerts_data(self) -> None:
         """Fetch unread alerts and optionally schedule marking them as read."""
         new_alerts, raw_json = await alerts.fetch_alerts(self.get_standard_headers())
 
-        if raw_json is not None:
-            self.alerts_json = raw_json
+        if raw_json is None:
+            _LOGGER.warning("Keeping stale alert data due to fetch error")
+            return
 
+        self.alerts_json = raw_json
         self.alerts = new_alerts
 
         if new_alerts and self.mark_alerts_as_read:
