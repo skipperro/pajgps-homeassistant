@@ -286,12 +286,14 @@ class PajGPSData:
     async def _update_elevation_for(self, device_id: int, position: models.PajGPSPositionData) -> None:
         """Fetch elevation for a single position and store the result."""
         elevation = await positions.fetch_elevation(device_id, position)
+        if elevation is None:
+            _LOGGER.warning("Failed to fetch elevation for device %s, keeping previous elevation if any", device_id)
+            return
         live = self.get_position(device_id)
         target = live if live is not None else position
         target.elevation = elevation
         target.lat = round(position.lat, 5)
         target.lng = round(position.lng, 5)
-
 
 
     async def update_devices_data(self) -> None:
