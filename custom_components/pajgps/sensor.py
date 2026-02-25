@@ -36,6 +36,7 @@ class PajGPSVoltageSensor(SensorEntity):
         self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_voltage"
         self._attr_name = f"{self._device_name} Voltage"
         self._attr_icon = "mdi:flash"
+        self._attr_suggested_display_precision = 1
 
     async def async_update(self) -> None:
         """Update the sensor state."""
@@ -269,6 +270,8 @@ class PajGPSElevationSensor(SensorEntity):
         self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_elevation"
         self._attr_name = f"{self._device_name} Elevation"
         self._attr_icon = "mdi:map-marker-up"
+        self._attr_suggested_display_precision = 1
+
 
     async def async_update(self) -> None:
         """Update the sensor state."""

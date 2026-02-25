@@ -13,6 +13,11 @@ This integration enables you to effortlessly incorporate PAJ GPS devices from ww
 - This integration is created with acknowledgement and limited support from PAJ GPS but **this integration is not official software from PAJ UG**.<br>
 - It's a custom integration created entirely by me (Skipperro), and thus PAJ UG is not responsible for any damage/issues caused by this integration, nor it offers any end-user support for it.
 
+## Moving into the Home Assistant core repository
+
+This integration is in the process of refactoring and adapting in order to be submitted for inclusion in the Home Assistant core repository. Once it is accepted and merged, it will be available as a built-in integration, eliminating the need for manual installation.
+This also means that it will no longer be necessary to add this repository to HACS, and the integration will be available for installation directly from the Home Assistant interface.
+
 ## Features
 - [x] Device tracking (Longitude, Latitude)
 - [x] Device battery level
