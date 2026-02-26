@@ -44,7 +44,7 @@ class PajGPSAlertSwitch(SwitchEntity):
 
     async def async_update(self) -> None:
         """Update the sensor state."""
-        await self._pajgps_data.async_update()
+        await self._pajgps_data.update_pajgps_data()
         device = self._pajgps_data.get_device(self._device_id)
         if device is None:
             self._state = None
@@ -116,7 +116,7 @@ async def async_setup_entry(
     pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
 
     # Update the data
-    await pajgps_data.async_update()
+    await pajgps_data.update_pajgps_data()
 
     # Add the Paj GPS alert switches to the entity registry
     devices = pajgps_data.get_device_ids()

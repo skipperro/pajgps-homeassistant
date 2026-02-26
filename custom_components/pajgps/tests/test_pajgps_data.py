@@ -1,15 +1,19 @@
 import os
 import time
+import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 import custom_components.pajgps.pajgps_data as pajgps_data
+from custom_components.pajgps.api.auth import get_login_token
+from custom_components.pajgps.api.positions import fetch_elevation
+from custom_components.pajgps.models import PajGPSAlert, PajGPSDevice, PajGPSPositionData
 from dotenv import load_dotenv
 
 class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
 
     data: pajgps_data.PajGPSData
 
-    def setUp(self) -> None:
+    async def asyncSetUp(self) -> None:
         """
         This function is called before each test case.
         """
@@ -17,8 +21,15 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         email = os.getenv('PAJGPS_EMAIL')
         password = os.getenv('PAJGPS_PASSWORD')
         entry_name = "test_entry"
-        pajgps_data.PajGPSData.clean_instances()
+        await pajgps_data.PajGPSData.clean_instances()
         self.data = pajgps_data.PajGPSData.get_instance("test-guid", entry_name, email, password, False, False, False)
+
+    async def asyncTearDown(self) -> None:
+        """
+        This function is called after each test case.
+        """
+        await self.data.async_close()
+        await pajgps_data.PajGPSData.clean_instances()
 
 
     async def test_login(self):
@@ -30,7 +41,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         if self.data.email is None or self.data.password is None:
             return
         # Test login with valid credentials
-        token = await self.data.get_login_token()
+        token = await get_login_token(self.data.email, self.data.password)
         assert token is not None
         # Test if login token is valid bearer header
         if token is not None:
@@ -40,7 +51,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         """
         Test the refresh_token method.
         """
-        with patch.object(self.data, 'get_login_token', new=AsyncMock(return_value="new_token")):
+        with patch('custom_components.pajgps.api.auth.refresh_token',
+                   new=AsyncMock(return_value=("new_token", time.time()))):
             self.data.token = None
             await self.data.refresh_token()
             assert self.data.token == "new_token"
@@ -55,7 +67,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
              patch.object(self.data, 'update_devices_data', new=AsyncMock())):
             self.data.token = "test_token"
             await self.data.refresh_token()
-            await self.data.async_update()
+            await self.data.update_pajgps_data()
             assert self.data.last_update > 0
 
 
@@ -74,9 +86,11 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         """
         self.data.token = "valid_token"
         self.data.last_token_update = time.time()
-        with patch.object(self.data, 'get_login_token', new=AsyncMock()) as mock_get_login_token:
+        with patch('custom_components.pajgps.api.auth.refresh_token',
+                   new=AsyncMock(return_value=("valid_token", self.data.last_token_update))) as mock_refresh:
             await self.data.refresh_token()
-            mock_get_login_token.assert_not_called()
+            mock_refresh.assert_called_once()
+            assert self.data.token == "valid_token"
 
     async def test_two_instances(self):
         """
@@ -89,7 +103,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         password_1 = "password_1"
         password_2 = "password_2"
 
-        pajgps_data.PajGPSData.clean_instances()
+        await pajgps_data.PajGPSData.clean_instances()
         data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name_1, email_1, password_1, False, False, False)
         data_2 = pajgps_data.PajGPSData.get_instance("guid2", entry_name_2, email_2, password_2, False, False, False)
         assert data_1 is not data_2
@@ -105,7 +119,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         entry_name = "test_entry"
         email = "email@email.com"
         password = "password"
-        pajgps_data.PajGPSData.clean_instances()
+        await pajgps_data.PajGPSData.clean_instances()
         data_1 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False, False, False)
         data_2 = pajgps_data.PajGPSData.get_instance("guid1", entry_name, email, password, False, False, False)
         assert data_1 is data_2
@@ -143,8 +157,8 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert pos.speed is not None
             assert pos.battery is not None
 
-        # Mock the make_get_request to test the update_alerts_data method without data from api
-        with patch.object(self.data, 'make_get_request', new=AsyncMock(return_value={"success": [
+        # Mock the make_request to test the update_alerts_data method without data from api
+        with patch('custom_components.pajgps.api.alerts.make_request', new=AsyncMock(return_value={"success": [
                 {
                   "id": 1,
                   "iddevice": 1,
@@ -169,14 +183,15 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test the elevation data.
         """
         await self.data.refresh_token()
-        await self.data.async_update()
+        await self.data.update_pajgps_data(forced=True)
         # Update the elevation data for the first device
         device_id = self.data.get_device_ids()[0]
         device = self.data.get_device(device_id)
         assert device is not None
-        await self.data.update_elevation(device_id)
         position = self.data.get_position(device_id)
         assert position is not None
+        elevation = await fetch_elevation(device_id, position)
+        position.elevation = elevation
         assert position.elevation is not None
 
     async def test_voltage_sensor(self):
@@ -184,7 +199,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         Test the voltage sensor data.
         """
         await self.data.refresh_token()
-        await self.data.async_update()
+        await self.data.update_pajgps_data(forced=True)
         # Check if any device has voltage data
         found_voltage = False
         for device_id in self.data.get_device_ids():
@@ -196,3 +211,607 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             else:
                 print(f"Device ID: {device_id} has no voltage data")
         assert found_voltage, "No device with voltage data found"
+
+    async def test_get_alerts_from_api(self):
+        """
+        Test getting alerts from real API (read-only, no modifications).
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+        await self.data.update_alerts_data()
+
+        # Alerts should be a list (can be empty)
+        assert self.data.alerts is not None
+        assert isinstance(self.data.alerts, list)
+
+        # If there are alerts, check their structure
+        for alert in self.data.alerts:
+            assert isinstance(alert, PajGPSAlert)
+            assert alert.device_id is not None
+            assert alert.alert_type is not None
+            assert alert.alert_type in [1, 2, 4, 5, 6, 7, 9, 13]  # Valid alert types
+
+    async def test_get_alerts_by_device(self):
+        """
+        Test filtering alerts by device_id.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+
+        if len(self.data.devices) > 0:
+            device_id = self.data.get_device_ids()[0]
+
+            # Mock alerts for testing
+            self.data.alerts = [
+                PajGPSAlert(device_id, 2),
+                PajGPSAlert(device_id, 4),
+                PajGPSAlert(999999, 5),  # Different device
+            ]
+
+            device_alerts = self.data.get_alerts(device_id)
+            assert len(device_alerts) == 2
+            for alert in device_alerts:
+                assert alert.device_id == device_id
+
+    async def test_device_is_alert_enabled(self):
+        """
+        Test the is_alert_enabled method for devices (read-only).
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+
+        assert len(self.data.devices) > 0
+        device = self.data.devices[0]
+
+        # Test all alert types
+        alert_types = [1, 2, 4, 5, 6, 7, 9, 13]
+        for alert_type in alert_types:
+            # Should return boolean without throwing error
+            result = device.is_alert_enabled(alert_type)
+            assert isinstance(result, bool)
+
+        # Test invalid alert type
+        result = device.is_alert_enabled(999)
+        assert result == False
+
+    async def test_get_device_info(self):
+        """
+        Test the get_device_info method for device registry.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+
+        assert len(self.data.devices) > 0
+        device_id = self.data.get_device_ids()[0]
+
+        device_info = self.data.get_device_info(device_id)
+        assert device_info is not None
+        assert "identifiers" in device_info
+        assert "name" in device_info
+        assert "manufacturer" in device_info
+        assert device_info["manufacturer"] == "PAJ GPS"
+        assert "model" in device_info
+        assert "sw_version" in device_info
+
+        # Test with non-existent device
+        device_info = self.data.get_device_info(999999)
+        assert device_info is None
+
+    async def test_get_device_by_id(self):
+        """
+        Test the get_device method.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+
+        assert len(self.data.devices) > 0
+        device_id = self.data.get_device_ids()[0]
+
+        device = self.data.get_device(device_id)
+        assert device is not None
+        assert device.id == device_id
+        assert device.name is not None
+        assert device.imei is not None
+
+        # Test with non-existent device
+        device = self.data.get_device(999999)
+        assert device is None
+
+    async def test_get_position_by_device_id(self):
+        """
+        Test the get_position method.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+        await self.data.update_position_data()
+
+        assert len(self.data.positions) > 0
+        device_id = self.data.get_device_ids()[0]
+
+        position = self.data.get_position(device_id)
+        assert position is not None
+        assert position.device_id == device_id
+        assert position.lat is not None
+        assert position.lng is not None
+        assert position.speed is not None
+        assert position.battery is not None
+
+        # Test with non-existent device
+        position = self.data.get_position(999999)
+        assert position is None
+
+    async def test_data_ttl(self):
+        """
+        Test that async_update respects data_ttl.
+        """
+        await self.data.refresh_token()
+
+        # First update
+        await self.data.update_pajgps_data(forced=True)
+        first_update_time = self.data.last_update
+
+        # Immediate second update (should be skipped due to TTL)
+        with patch.object(self.data, 'update_devices_data', new=AsyncMock()) as mock_update:
+            await self.data.update_pajgps_data(forced=False)
+            mock_update.assert_not_called()
+
+        # Update time should not change
+        assert self.data.last_update == first_update_time
+
+        # Forced update should work
+        await self.data.update_pajgps_data(forced=True)
+        assert self.data.last_update > first_update_time
+
+    async def test_clean_data(self):
+        """
+        Test the clean_data method.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+        await self.data.update_position_data()
+
+        assert len(self.data.devices) > 0
+        assert len(self.data.positions) > 0
+
+        self.data.clean_data()
+
+        assert len(self.data.devices) == 0
+        assert len(self.data.positions) == 0
+        assert len(self.data.alerts) == 0
+
+    async def test_api_error_handling(self):
+        """
+        Test that stale device data is preserved when an API error occurs.
+        """
+        from custom_components.pajgps.requests import ApiResponseError
+        # Pre-populate with some devices so we can verify they are NOT wiped
+        self.data.devices = [models.PajGPSDevice(1)]
+        with patch('custom_components.pajgps.api.devices.make_request',
+                         new=AsyncMock(side_effect=ApiResponseError({"error": "Test error"}))):
+            await self.data.update_devices_data()
+            # Stale data should be preserved, not wiped
+            assert len(self.data.devices) == 1
+
+    async def test_timeout_handling(self):
+        """
+        Test that stale position data is preserved when a timeout occurs.
+        """
+        # Pre-populate with a position so we can verify it is NOT wiped
+        self.data.positions = [models.PajGPSPositionData(1, 52.0, 13.0, 0, 0, 100)]
+        with patch('custom_components.pajgps.api.positions.make_request',
+                         new=AsyncMock(side_effect=TimeoutError())):
+            await self.data.update_position_data()
+            # Stale data should be preserved, not wiped
+            assert len(self.data.positions) == 1
+
+
+    async def test_background_tasks_tracking(self):
+        """
+        Test that background tasks are properly tracked.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+
+        # Mock make_request for alerts with mark_as_read enabled
+        self.data.mark_alerts_as_read = True
+
+        with patch('custom_components.pajgps.api.alerts.make_request',
+                         new=AsyncMock(return_value={"success": [{"iddevice": 1, "meldungtyp": 2}]})):
+                await self.data.update_alerts_data()
+
+                # Give background tasks a moment to start
+                await asyncio.sleep(0.1)
+
+                # Background tasks should complete quickly
+                if self.data._background_tasks:
+                    await asyncio.gather(*self.data._background_tasks, return_exceptions=True)
+
+                # After completion, background tasks should be cleaned up
+                assert len(self.data._background_tasks) == 0
+
+    async def test_position_data_structure(self):
+        """
+        Test the structure of position data.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+        await self.data.update_position_data()
+
+        assert len(self.data.positions) > 0
+
+        for position in self.data.positions:
+            assert isinstance(position, PajGPSPositionData)
+            assert isinstance(position.lat, (int, float))
+            assert isinstance(position.lng, (int, float))
+            assert isinstance(position.direction, int)
+            assert isinstance(position.speed, int)
+            assert isinstance(position.battery, int)
+            assert -90 <= position.lat <= 90
+            assert -180 <= position.lng <= 180
+            assert 0 <= position.direction <= 360
+            assert position.speed >= 0
+            assert 0 <= position.battery <= 100
+
+    async def test_device_data_structure(self):
+        """
+        Test the structure of device data.
+        """
+        await self.data.refresh_token()
+        await self.data.update_devices_data()
+
+        assert len(self.data.devices) > 0
+
+        for device in self.data.devices:
+            assert isinstance(device, PajGPSDevice)
+            assert isinstance(device.id, int)
+            assert isinstance(device.name, str)
+            assert isinstance(device.imei, str)
+            assert isinstance(device.model, str)
+            assert isinstance(device.has_battery, bool)
+            # Check alarm capabilities are booleans
+            assert isinstance(device.has_alarm_sos, bool)
+            assert isinstance(device.has_alarm_shock, bool)
+            assert isinstance(device.has_alarm_voltage, bool)
+            assert isinstance(device.has_alarm_battery, bool)
+            assert isinstance(device.has_alarm_speed, bool)
+            assert isinstance(device.has_alarm_power_cutoff, bool)
+            assert isinstance(device.has_alarm_ignition, bool)
+            assert isinstance(device.has_alarm_drop, bool)
+
+    async def test_multiple_updates_in_sequence(self):
+        """
+        Test multiple sequential updates work correctly.
+        """
+        await self.data.refresh_token()
+
+        # First update
+        await self.data.update_pajgps_data(forced=True)
+        devices_count_1 = len(self.data.devices)
+        positions_count_1 = len(self.data.positions)
+        print(f"After first update: devices={devices_count_1}, positions={positions_count_1}")
+
+        # Second update (forced)
+        await self.data.update_pajgps_data(forced=True)
+        devices_count_2 = len(self.data.devices)
+        positions_count_2 = len(self.data.positions)
+        print(f"After second update: devices={devices_count_2}, positions={positions_count_2}")
+
+        # Should have data after both updates
+        assert devices_count_1 > 0, f"First update: Expected devices > 0, got {devices_count_1}"
+        assert devices_count_2 > 0, f"Second update: Expected devices > 0, got {devices_count_2}"
+        assert positions_count_1 > 0, f"First update: Expected positions > 0, got {positions_count_1}"
+        assert positions_count_2 > 0, f"Second update: Expected positions > 0, got {positions_count_2}"
+
+    async def test_update_time_sensors(self):
+        """
+        Test the update time measurements in sensor data.
+        """
+        await self.data.refresh_token()
+        await self.data.update_pajgps_data(forced=True)
+
+        # Check that total update time was measured
+        assert self.data.total_update_time_ms > 0
+        print(f"Total update time: {self.data.total_update_time_ms:.2f}ms")
+
+        # Check that each device has total update time measurements
+        for device_id in self.data.get_device_ids():
+            sensors = self.data.get_sensors(device_id)
+            assert sensors is not None
+
+            # Check total update time (should be same for all devices)
+            assert sensors.total_update_time_ms == self.data.total_update_time_ms
+            print(f"Device {device_id} total update time: {sensors.total_update_time_ms:.2f}ms")
+
+    async def test_concurrent_update_skipped(self):
+        """
+        Test that concurrent updates are properly skipped when a previous update is still running.
+        This simulates slow API responses that cause updates to take longer than SCAN_INTERVAL.
+        """
+        await self.data.refresh_token()
+
+        # Track how many times the actual update methods are called
+        original_update_devices = self.data.update_devices_data
+        update_devices_call_count = 0
+
+        async def slow_update_devices():
+            """Simulate slow API response by adding delay"""
+            nonlocal update_devices_call_count
+            update_devices_call_count += 1
+            await asyncio.sleep(2)  # Simulate slow API
+            await original_update_devices()
+
+        # Patch the update method to be slow
+        self.data.update_devices_data = slow_update_devices
+
+        # Start first update (will take ~2 seconds)
+        first_update_task = asyncio.create_task(self.data.update_pajgps_data(forced=True))
+
+        # Wait a bit to ensure first update has acquired the lock
+        await asyncio.sleep(0.1)
+
+        # Try to start second update while first is still running
+        # This should be skipped because lock is held
+        second_update_start_time = time.time()
+        await self.data.update_pajgps_data(forced=False)
+        second_update_duration = time.time() - second_update_start_time
+
+        # Second update should return almost immediately (< 0.5s)
+        assert second_update_duration < 0.5, \
+            f"Second update took {second_update_duration:.2f}s, should have been skipped immediately"
+
+        # Wait for first update to complete
+        await first_update_task
+
+        # Verify that update_devices was only called once (from first update)
+        assert update_devices_call_count == 1, \
+            f"Expected 1 update call, but got {update_devices_call_count}"
+
+        print(f"✓ Second update was properly skipped (returned in {second_update_duration:.3f}s)")
+        print(f"✓ Only {update_devices_call_count} actual update was performed")
+
+    async def test_get_request_retry_on_timeout(self):
+        """
+        Test that make_request retries up to 3 times on timeout for GET requests.
+        """
+        from custom_components.pajgps import requests as pajgps_requests
+
+        call_count = [0]
+
+        class MockResponse:
+            def __init__(self):
+                self.status = 200
+                self.headers = {'Content-Type': 'application/json'}
+
+            async def json(self):
+                return {"success": "data"}
+
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def get(self, *args, **kwargs):
+                self.call_count[0] += 1
+                if self.call_count[0] < 3:
+                    raise asyncio.TimeoutError("Simulated timeout")
+                return MockResponse()
+
+            async def close(self):
+                self.closed = True
+
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
+
+        try:
+            result = await pajgps_requests.make_request(
+                method="GET",
+                url="http://test.com",
+                headers={},
+                timeout=1,
+                max_attempts=3
+            )
+            assert call_count[0] == 3, f"Expected 3 attempts, but got {call_count[0]}"
+            assert result == {"success": "data"}
+            print(f"✓ GET request succeeded after {call_count[0]} attempts (2 timeouts, 1 success)")
+        finally:
+            pajgps_requests.aiohttp.ClientSession = original_client_session
+
+    async def test_get_request_fails_after_max_retries(self):
+        """
+        Test that make_request fails after 3 timeout attempts for GET requests.
+        """
+        from custom_components.pajgps import requests as pajgps_requests
+
+        call_count = [0]
+
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def get(self, *args, **kwargs):
+                self.call_count[0] += 1
+                raise asyncio.TimeoutError("Simulated timeout")
+
+            async def close(self):
+                self.closed = True
+
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
+
+        try:
+            with self.assertRaises(asyncio.TimeoutError):
+                await pajgps_requests.make_request(
+                    method="GET",
+                    url="http://test.com",
+                    headers={},
+                    timeout=1,
+                    max_attempts=3
+                )
+
+            assert call_count[0] == 3, f"Expected 3 attempts, but got {call_count[0]}"
+            print(f"✓ GET request properly failed after {call_count[0]} timeout attempts")
+        finally:
+            pajgps_requests.aiohttp.ClientSession = original_client_session
+
+    async def test_post_request_retry_on_timeout(self):
+        """
+        Test that make_request retries up to 3 times on timeout for POST requests.
+        """
+        from custom_components.pajgps import requests as pajgps_requests
+
+        call_count = [0]
+
+        class MockResponse:
+            def __init__(self):
+                self.status = 200
+                self.headers = {'Content-Type': 'application/json'}
+
+            async def json(self):
+                return {"success": "posted"}
+
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def post(self, *args, **kwargs):
+                self.call_count[0] += 1
+                if self.call_count[0] < 2:
+                    raise asyncio.TimeoutError("Simulated timeout")
+                return MockResponse()
+
+            async def close(self):
+                self.closed = True
+
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
+
+        try:
+            result = await pajgps_requests.make_request(
+                method="POST",
+                url="http://test.com",
+                headers={},
+                payload={"data": "test"},
+                timeout=1,
+                max_attempts=3
+            )
+            assert call_count[0] == 2, f"Expected 2 attempts, but got {call_count[0]}"
+            assert result == {"success": "posted"}
+            print(f"✓ POST request succeeded after {call_count[0]} attempts (1 timeout, 1 success)")
+        finally:
+            pajgps_requests.aiohttp.ClientSession = original_client_session
+
+    async def test_put_request_retry_on_timeout(self):
+        """
+        Test that make_request retries up to 3 times on timeout for PUT requests.
+        """
+        from custom_components.pajgps import requests as pajgps_requests
+
+        call_count = [0]
+
+        class MockResponse:
+            def __init__(self):
+                self.status = 200
+                self.headers = {'Content-Type': 'application/json'}
+
+            async def json(self):
+                return {"success": "updated"}
+
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def put(self, *args, **kwargs):
+                self.call_count[0] += 1
+                if self.call_count[0] < 2:
+                    raise asyncio.TimeoutError("Simulated timeout")
+                return MockResponse()
+
+            async def close(self):
+                self.closed = True
+
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
+
+        try:
+            result = await pajgps_requests.make_request(
+                method="PUT",
+                url="http://test.com",
+                headers={},
+                timeout=1,
+                max_attempts=3
+            )
+            assert call_count[0] == 2, f"Expected 2 attempts, but got {call_count[0]}"
+            assert result == {"success": "updated"}
+            print(f"✓ PUT request succeeded after {call_count[0]} attempts (1 timeout, 1 success)")
+        finally:
+            pajgps_requests.aiohttp.ClientSession = original_client_session
+
+    async def test_non_timeout_errors_not_retried(self):
+        """
+        Test that non-timeout errors are not retried.
+        """
+        from custom_components.pajgps import requests as pajgps_requests
+
+        call_count = [0]
+
+        class MockResponse:
+            def __init__(self):
+                self.status = 400
+                self.headers = {'Content-Type': 'application/json'}
+
+            async def json(self):
+                return {"error": "Bad request"}
+
+        class MockSession:
+            def __init__(self, call_count):
+                self.call_count = call_count
+                self.closed = False
+
+            async def get(self, *args, **kwargs):
+                self.call_count[0] += 1
+                return MockResponse()
+
+            async def close(self):
+                self.closed = True
+
+        original_client_session = pajgps_requests.aiohttp.ClientSession
+
+        def mock_client_session(*args, **kwargs):
+            return MockSession(call_count)
+
+        pajgps_requests.aiohttp.ClientSession = mock_client_session
+
+        try:
+            with self.assertRaises(Exception):  # Will raise exception due to 400 status
+                await pajgps_requests.make_request(
+                    method="GET",
+                    url="http://test.com",
+                    headers={},
+                    timeout=1,
+                    max_attempts=3
+                )
+
+            assert call_count[0] == 1, f"Expected 1 attempt for non-timeout error, but got {call_count[0]}"
+            print(f"✓ Non-timeout error properly failed immediately without retry")
+        finally:
+            pajgps_requests.aiohttp.ClientSession = original_client_session
+
