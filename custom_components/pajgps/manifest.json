@@ -4,10 +4,10 @@
   "documentation": "https://github.com/Skipperro/pajgps-homeassistant",
   "dependencies": [],
   "codeowners": ["Skipperro"],
-  "requirements": [],
+  "requirements": ["pajgps-api>=0.2.1"],
   "iot_class": "cloud_polling",
   "config_flow": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "integration_type": "service",
   "supported_platforms": ["device_tracker", "sensor", "binary_sensor", "switch"]
 }

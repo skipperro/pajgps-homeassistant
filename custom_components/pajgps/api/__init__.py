@@ -1,2 +1,0 @@
-"""PajGPS API sub-package."""
-

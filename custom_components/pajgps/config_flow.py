@@ -9,7 +9,6 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 
-from . import PajGPSData
 from .const import DOMAIN
 
 big_int = vol.All(vol.Coerce(int), vol.Range(min=300))
@@ -107,7 +106,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             if not user_input['password'] or user_input['password'] == '':
                 errors['base'] = 'password_required'
             if not errors:
-                # Update the config entry with the new data
+                # Update the config entry with the new data and let the
+                # _async_update_listener in __init__.py reload the coordinator.
                 new_data = {
                     'guid': self._config_entry.data['guid'],
                     'entry_name': user_input['entry_name'],
@@ -118,36 +118,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     'force_battery': user_input['force_battery'],
                 }
 
-                # Get existing instance of PajGPSData
-                paj_data = PajGPSData.get_instance(
-                    self._config_entry.data['guid'],
-                    self._config_entry.data['entry_name'],
-                    self._config_entry.data['email'],
-                    self._config_entry.data['password'],
-                    self._config_entry.data['mark_alerts_as_read'],
-                    self._config_entry.data['fetch_elevation'],
-                    self._config_entry.data['force_battery'],
-                )
-                paj_data.entry_name = new_data['entry_name']
-                paj_data.email = new_data['email']
-                paj_data.password = new_data['password']
-                paj_data.mark_alerts_as_read = new_data['mark_alerts_as_read']
-                paj_data.fetch_elevation = new_data['fetch_elevation']
-                paj_data.force_battery = new_data['force_battery']
-
-                self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-
-                await paj_data.refresh_token(True)
-                await paj_data.update_pajgps_data(True)
-
-                # Rename the entry in the UI
                 self.hass.config_entries.async_update_entry(
                     self._config_entry,
                     data=new_data,
                     title=new_data['entry_name'],
                 )
 
-                return self.async_create_entry(title=f"{new_data['entry_name']}", data=new_data)
+                return self.async_create_entry(title=new_data['entry_name'], data=new_data)
 
 
 

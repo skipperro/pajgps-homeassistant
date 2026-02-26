@@ -1,439 +1,169 @@
 """
 Platform for GPS sensor integration.
-This module is responsible for setting up the battery level and speed sensor entities
-and updating their state based on the data received from the Paj GPS API.
+Reads sensor, position, and elevation data from PajGpsCoordinator.
 """
 from __future__ import annotations
-
-from datetime import timedelta
-
+import logging
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
-
-from custom_components.pajgps.const import DOMAIN, VERSION
-from custom_components.pajgps.pajgps_data import PajGPSData
-import logging
-
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from .const import DOMAIN
+from .coordinator import PajGpsCoordinator
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(seconds=30)
+class PajGPSVoltageSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
+    """Voltage sensor reading from coordinator sensor_data."""
+    _attr_device_class = SensorDeviceClass.VOLTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "V"
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:flash"
 
-class PajGPSVoltageSensor(SensorEntity):
-    """
-    Representation of a Paj GPS voltage sensor.
-    Takes the data from base PajGPSData object created in async_setup_entry.
-    """
-    _pajgps_data = None
-    _device_id = None
-    _voltage: float | None = None
-
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
-        """Initialize the sensor."""
-        self._pajgps_data = pajgps_data
+    def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
+        super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_voltage"
-        self._attr_name = f"{self._device_name} Voltage"
-        self._attr_icon = "mdi:flash"
-        self._attr_suggested_display_precision = 1
-
-    async def async_update(self) -> None:
-        """Update the sensor state."""
-        try:
-            await self._pajgps_data.update_pajgps_data()
-            sensor_data = self._pajgps_data.get_sensors(self._device_id)
-            if sensor_data is not None:
-                if sensor_data.voltage is not None:
-                    self._voltage = sensor_data.voltage
-                else:
-                    self._voltage = None
-
-        except Exception as e:
-            _LOGGER.error("Error updating voltage sensor: %s", e)
-            self._voltage = None
+        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
+        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
+        self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_voltage"
+        self._attr_name = f"{device_name} Voltage"
 
     @property
     def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-        if self._pajgps_data is None:
-            return None
-        return self._pajgps_data.get_device_info(self._device_id)
-
-    @property
-    def should_poll(self) -> bool:
-        return True
-
-    @property
-    def device_class(self) -> SensorDeviceClass | str | None:
-        return SensorDeviceClass.VOLTAGE
-
-    @property
-    def state_class(self) -> SensorStateClass | str | None:
-        return SensorStateClass.MEASUREMENT
+        return self.coordinator.get_device_info(self._device_id)
 
     @property
     def native_value(self) -> float | None:
-        if self._voltage is not None:
-            new_value = float(self._voltage)
-            # Make sure value is between 0 and 300
-            if new_value < 0.0:
-                new_value = 0.0
-            elif new_value > 300.0:
-                new_value = 300.0
-            return new_value
+        sd = self.coordinator.data.sensor_data.get(self._device_id)
+        if sd is None or sd.volt is None:
+            return None
+        value = float(sd.volt)
+        return max(0.0, min(300.0, value))
 
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        return "V"
-
-class PajGPSBatterySensor(SensorEntity):
-    """
-    Representation of a Paj GPS battery level sensor.
-    Takes the data from base PajGPSData object created in async_setup_entry.
-    """
-    _pajgps_data = None
-    _device_id = None
-    _battery_level: int | None = None
-
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
-        """Initialize the sensor."""
-        self._pajgps_data = pajgps_data
+class PajGPSBatterySensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
+    """Battery level sensor reading from coordinator positions."""
+    _attr_device_class = SensorDeviceClass.BATTERY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "%"
+    def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
+        super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_battery"
-        self._attr_name = f"{self._device_name} Battery Level"
-        self._attr_icon = "mdi:battery"
-
-    async def async_update(self) -> None:
-        """Update the sensor state."""
-        try:
-            await self._pajgps_data.update_pajgps_data()
-            position_data = self._pajgps_data.get_position(self._device_id)
-            if position_data is not None:
-                if position_data.battery is not None:
-                    self._battery_level = position_data.battery
-                else:
-                    self._battery_level = None
-        except Exception as e:
-            _LOGGER.error("Error updating battery sensor: %s", e)
-            self._battery_level = None
+        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
+        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
+        self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_battery"
+        self._attr_name = f"{device_name} Battery Level"
 
     @property
     def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-        if self._pajgps_data is None:
-            return None
-        return self._pajgps_data.get_device_info(self._device_id)
-
-    @property
-    def should_poll(self) -> bool:
-        return True
-
-    @property
-    def device_class(self) -> SensorDeviceClass | str | None:
-        return SensorDeviceClass.BATTERY
-
-    @property
-    def state_class(self) -> SensorStateClass | str | None:
-        return SensorStateClass.MEASUREMENT
+        return self.coordinator.get_device_info(self._device_id)
 
     @property
     def native_value(self) -> int | None:
-        if self._battery_level is not None:
-            new_value = int(self._battery_level)
-            # Make sure value is between 0 and 100
-            if new_value < 0:
-                new_value = 0
-            elif new_value > 100:
-                new_value = 100
-            return new_value
-        else:
+        tp = self.coordinator.data.positions.get(self._device_id)
+        if tp is None or tp.battery is None:
             return None
+        return max(0, min(100, int(tp.battery)))
 
     @property
-    def native_unit_of_measurement(self) -> str | None:
-        return "%"
-
-    @property
-    def icon(self) -> str | None:
-        """Set the icon based on battery level in 10% increments."""
-        battery_level = self._battery_level
-        if battery_level is not None:
-            if battery_level == 100:
-                return "mdi:battery"
-            elif battery_level >= 90:
-                return "mdi:battery-90"
-            elif battery_level >= 80:
-                return "mdi:battery-80"
-            elif battery_level >= 70:
-                return "mdi:battery-70"
-            elif battery_level >= 60:
-                return "mdi:battery-60"
-            elif battery_level >= 50:
-                return "mdi:battery-50"
-            elif battery_level >= 40:
-                return "mdi:battery-40"
-            elif battery_level >= 30:
-                return "mdi:battery-30"
-            elif battery_level >= 20:
-                return "mdi:battery-20"
-            elif battery_level >= 10:
-                return "mdi:battery-10"
-            else:
-                return "mdi:battery-alert"
-        else:
+    def icon(self) -> str:
+        level = self.native_value
+        if level is None:
             return "mdi:battery-alert"
+        if level == 100:
+            return "mdi:battery"
+        if level >= 90:
+            return "mdi:battery-90"
+        if level >= 80:
+            return "mdi:battery-80"
+        if level >= 70:
+            return "mdi:battery-70"
+        if level >= 60:
+            return "mdi:battery-60"
+        if level >= 50:
+            return "mdi:battery-50"
+        if level >= 40:
+            return "mdi:battery-40"
+        if level >= 30:
+            return "mdi:battery-30"
+        if level >= 20:
+            return "mdi:battery-20"
+        if level >= 10:
+            return "mdi:battery-10"
+        return "mdi:battery-alert"
 
-class PajGPSSpeedSensor(SensorEntity):
-    """
-    Representation of a Paj GPS speed sensor.
-    Takes the data from base PajGPSData object created in async_setup_entry.
-    """
-    _pajgps_data = None
-    _device_id = None
-    _speed: float | None = None
-
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
-        """Initialize the sensor."""
-        self._pajgps_data = pajgps_data
+class PajGPSSpeedSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
+    """Speed sensor reading from coordinator positions."""
+    _attr_device_class = SensorDeviceClass.SPEED
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "km/h"
+    _attr_icon = "mdi:speedometer"
+    def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
+        super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_speed"
-        self._attr_name = f"{self._device_name} Speed"
-        self._attr_icon = "mdi:speedometer"
-
-    async def async_update(self) -> None:
-        """Update the sensor state."""
-        try:
-            await self._pajgps_data.update_pajgps_data()
-            position_data = self._pajgps_data.get_position(self._device_id)
-            if position_data is not None:
-                if position_data.speed is not None:
-                    self._speed = position_data.speed
-                else:
-                    self._speed = None
-        except Exception as e:
-            _LOGGER.error("Error updating speed sensor: %s", e)
-            self._speed = None
+        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
+        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
+        self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_speed"
+        self._attr_name = f"{device_name} Speed"
 
     @property
     def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-        if self._pajgps_data is None:
-            return None
-        return self._pajgps_data.get_device_info(self._device_id)
-
-    @property
-    def should_poll(self) -> bool:
-        return True
-
-    @property
-    def device_class(self) -> SensorDeviceClass | str | None:
-        return SensorDeviceClass.SPEED
-
-    @property
-    def state_class(self) -> SensorStateClass | str | None:
-        return SensorStateClass.MEASUREMENT
+        return self.coordinator.get_device_info(self._device_id)
 
     @property
     def native_value(self) -> float | None:
-        if self._speed is not None:
-            new_value = float(self._speed)
-            # Make sure value is between 0 and 1000
-            if new_value < 0.0:
-                new_value = 0.0
-            elif new_value > 1000.0:
-                new_value = 1000.0
-            return new_value
-        else:
+        tp = self.coordinator.data.positions.get(self._device_id)
+        if tp is None or tp.speed is None:
             return None
+        return max(0.0, min(1000.0, float(tp.speed)))
 
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        return "km/h"
-
-class PajGPSElevationSensor(SensorEntity):
-    """
-    Representation of a Paj GPS elevation sensor.
-    Takes the data from base PajGPSData object created in async_setup_entry.
-    """
-    _pajgps_data = None
-    _device_id = None
-    _elevation: float | None = None
-
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
-        """Initialize the sensor."""
-        self._pajgps_data = pajgps_data
+class PajGPSElevationSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
+    """Elevation sensor reading from coordinator elevations."""
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "m"
+    _attr_icon = "mdi:map-marker-up"
+    _attr_suggested_display_precision = 1
+    def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
+        super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_elevation"
-        self._attr_name = f"{self._device_name} Elevation"
-        self._attr_icon = "mdi:map-marker-up"
-        self._attr_suggested_display_precision = 1
-
-
-    async def async_update(self) -> None:
-        """Update the sensor state."""
-        try:
-            await self._pajgps_data.update_pajgps_data()
-            position_data = self._pajgps_data.get_position(self._device_id)
-            if position_data is not None:
-                if position_data.elevation is not None:
-                    self._elevation = position_data.elevation
-                else:
-                    self._elevation = None
-        except Exception as e:
-            _LOGGER.error("Error updating elevation sensor: %s", e)
-            self._elevation = None
+        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
+        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
+        self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_elevation"
+        self._attr_name = f"{device_name} Elevation"
 
     @property
     def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-        if self._pajgps_data is None:
-            return None
-        return self._pajgps_data.get_device_info(self._device_id)
-
-    @property
-    def should_poll(self) -> bool:
-        return True
-
-    @property
-    def device_class(self) -> SensorDeviceClass | str | None:
-        return SensorDeviceClass.DISTANCE
-
-    @property
-    def state_class(self) -> SensorStateClass | str | None:
-        return SensorStateClass.MEASUREMENT
+        return self.coordinator.get_device_info(self._device_id)
 
     @property
     def native_value(self) -> float | None:
-        if self._elevation is not None:
-            new_value = float(self._elevation)
-            # Make sure value is between 0 and 10000
-            if new_value < 0.0:
-                new_value = 0.0
-            elif new_value > 10000.0:
-                new_value = 10000.0
-            return new_value
-        else:
+        elevation = self.coordinator.data.elevations.get(self._device_id)
+        if elevation is None:
             return None
-
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        return "m"
-
-
-
-class PajGPSTotalUpdateTimeSensor(SensorEntity):
-    """
-    Representation of a Paj GPS total update time sensor.
-    Measures the total time taken to update all PajGPS data.
-    """
-    _pajgps_data = None
-    _device_id = None
-    _total_update_time: float | None = None
-
-    def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
-        """Initialize the sensor."""
-        self._pajgps_data = pajgps_data
-        self._device_id = device_id
-        self._device_name = f"{self._pajgps_data.get_device(device_id).name}"
-        self._attr_unique_id = f"pajgps_{self._pajgps_data.guid}_{self._device_id}_total_update_time"
-        self._attr_name = f"{self._device_name} Total Update Time"
-        self._attr_icon = "mdi:timer"
-
-    async def async_update(self) -> None:
-        """Update the sensor state."""
-        try:
-            await self._pajgps_data.update_pajgps_data()
-            sensor_data = self._pajgps_data.get_sensors(self._device_id)
-            if sensor_data is not None:
-                self._total_update_time = sensor_data.total_update_time_ms
-            else:
-                self._total_update_time = None
-        except Exception as e:
-            _LOGGER.error("Error updating total update time sensor: %s", e)
-            self._total_update_time = None
-
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-        if self._pajgps_data is None:
-            return None
-        return self._pajgps_data.get_device_info(self._device_id)
-
-    @property
-    def should_poll(self) -> bool:
-        return True
-
-    @property
-    def device_class(self) -> SensorDeviceClass | str | None:
-        return SensorDeviceClass.DURATION
-
-    @property
-    def state_class(self) -> SensorStateClass | str | None:
-        return SensorStateClass.MEASUREMENT
-
-    @property
-    def native_value(self) -> float | None:
-        return self._total_update_time
-
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        return "ms"
-
+        return max(0.0, min(10000.0, float(elevation)))
 
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: config_entries.ConfigEntry,
     async_add_entities,
-):
-    """Add sensors for passed config_entry in HA."""
-    _LOGGER.debug("Starting setup for PAJ GPS integration")
-
-    # Get the entry name
-    entry_name = config_entry.data.get("entry_name", "My Paj GPS account")
-
-    # Validate email and password
-    guid = config_entry.data.get("guid")
-    email = config_entry.data.get("email")
-    password = config_entry.data.get("password")
-    mark_alerts_as_read = config_entry.data.get("mark_alerts_as_read", True)
-    if not email or not password:
-        _LOGGER.error("Email or password not set in config entry")
-        return
-
+) -> None:
+    """Set up PAJ GPS sensor entities from a config entry."""
+    coordinator: PajGpsCoordinator = hass.data[DOMAIN][config_entry.entry_id]
     fetch_elevation = config_entry.data.get("fetch_elevation", False)
     force_battery = config_entry.data.get("force_battery", False)
-
-    # Create main Paj GPS data object from pajgps_data.py
-    pajgps_data = PajGPSData.get_instance(guid, entry_name, email, password, mark_alerts_as_read, fetch_elevation, force_battery)
-
-    # Update the data
-    await pajgps_data.update_pajgps_data()
-
-    # Add the Paj GPS sensors to the entity registry
-    devices = pajgps_data.get_device_ids()
-    if devices is not None:
-        _LOGGER.debug("Devices found: %s", devices)
-        entities = []
-        for device_id in devices:
-            entities.append(PajGPSSpeedSensor(pajgps_data, device_id))
-            # Check if this device model supports battery
-            if pajgps_data.get_device(device_id).has_battery or pajgps_data.force_battery:
-                entities.append(PajGPSBatterySensor(pajgps_data, device_id))
-            # Check if user wants to get elevation
-            if pajgps_data.fetch_elevation:
-                entities.append(PajGPSElevationSensor(pajgps_data, device_id))
-            # Add voltage sensor for all devices
-            # TODO: Think of a way to disable this if not needed
-            entities.append(PajGPSVoltageSensor(pajgps_data, device_id))
-            # Add total update time sensor for all devices
-            entities.append(PajGPSTotalUpdateTimeSensor(pajgps_data, device_id))
-
-        if entities and async_add_entities:
-            async_add_entities(entities, update_before_add=True)
+    entities = []
+    for device in coordinator.data.devices:
+        if device.id is None:
+            continue
+        entities.append(PajGPSSpeedSensor(coordinator, device.id))
+        entities.append(PajGPSVoltageSensor(coordinator, device.id))
+        # Battery: only if device model supports it or user forced it
+        has_battery = getattr(device, "last_battery", None) is not None
+        if has_battery or force_battery:
+            entities.append(PajGPSBatterySensor(coordinator, device.id))
+        if fetch_elevation:
+            entities.append(PajGPSElevationSensor(coordinator, device.id))
+    if entities:
+        async_add_entities(entities)
     else:
-        _LOGGER.error("No devices found for entry: %s", entry_name)
-
+        _LOGGER.warning("No PAJ GPS sensor entities to add")

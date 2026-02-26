@@ -6,5 +6,9 @@ custom_components/ipify/
 /.env
 
 custom_components/pajgps/__pycache__/
-
+custom_components/pajgps/api/__pycache__/
 custom_components/pajgps/tests/__pycache__/
+
+custom_components/pajgps/api/
+
+docs/
