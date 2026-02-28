@@ -17,6 +17,14 @@ from custom_components.pajgps.coordinator import PajGpsCoordinator
 from custom_components.pajgps.coordinator_data import CoordinatorData
 
 
+from custom_components.pajgps.const import ALERT_TYPE_TO_MODEL_FIELD
+
+
+# A device_models entry that advertises support for every known alert type,
+# plus a model name so get_device_info can read device_models[0]["model"].
+ALL_ALERTS_MODEL = {"model": "Test Model", **{model_field: 1 for model_field in ALERT_TYPE_TO_MODEL_FIELD.values()}}
+
+
 def make_device(device_id: int = 1, **kwargs) -> Device:
     defaults = dict(
         id=device_id,
@@ -31,6 +39,7 @@ def make_device(device_id: int = 1, **kwargs) -> Device:
         alarmzuendalarm=1,
         alarm_fall_enabled=1,
         alarm_volt=1,
+        device_models=[dict(ALL_ALERTS_MODEL)],
     )
     defaults.update(kwargs)
     return Device(**defaults)

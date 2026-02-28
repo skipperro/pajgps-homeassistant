@@ -6,6 +6,19 @@ ALERT_NAMES = {1: "Shock Alert", 2: "Battery Alert", 3: "Radius Alert", 4: "SOS 
                9: "Drop Alert", 10: "Area Enter Alert", 11: "Area Leave Alert",
                13: "Voltage Alert", 22: "Turn off Alert"}
 
+# Maps alert_type int → device_models[0] field that indicates hardware support.
+# A value of 1 means the device model supports this alert type; 0 means it does not.
+ALERT_TYPE_TO_MODEL_FIELD: dict[int, str] = {
+    1:  "alarm_erschuetterung",   # Shock
+    2:  "alarm_batteriestand",    # Battery
+    4:  "alarm_sos",              # SOS
+    5:  "alarm_geschwindigkeit",  # Speed
+    6:  "alarm_stromunterbrechung",  # Power cut-off
+    7:  "alarm_zuendalarm",       # Ignition
+    9:  "alarm_drop",             # Drop
+    13: "alarm_volt",             # Voltage
+}
+
 # Maps alert_type int → Device field name used in update_device() PUT payload
 ALERT_TYPE_TO_DEVICE_FIELD: dict[int, str] = {
     1:  "alarmbewegung",

@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .const import DOMAIN, ALERT_NAMES, ALERT_TYPE_TO_DEVICE_FIELD
+from .const import DOMAIN, ALERT_NAMES, ALERT_TYPE_TO_DEVICE_FIELD, ALERT_TYPE_TO_MODEL_FIELD
 from .coordinator import PajGpsCoordinator
 _LOGGER = logging.getLogger(__name__)
 class PajGPSAlertSensor(CoordinatorEntity[PajGpsCoordinator], BinarySensorEntity):
@@ -49,7 +49,13 @@ async def async_setup_entry(
     for device in coordinator.data.devices:
         if device.id is None:
             continue
+        model = device.device_models[0] if device.device_models else {}
         for alert_type, field in ALERT_TYPE_TO_DEVICE_FIELD.items():
+            # Check hardware support via device_models — skip if the model does not
+            # advertise this alert capability (field absent or == 0).
+            model_field = ALERT_TYPE_TO_MODEL_FIELD.get(alert_type)
+            if not model_field or not model.get(model_field):
+                continue
             # Check presence (is not None), not truthiness — a value of 0 means
             # the alert is supported but currently disabled; it still needs an entity.
             if getattr(device, field, None) is not None:

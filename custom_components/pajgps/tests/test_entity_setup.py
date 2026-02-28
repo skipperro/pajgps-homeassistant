@@ -2,24 +2,32 @@
 Tests for entity setup of alert switches and binary sensors, and for
 device model resolution in get_device_info.
 
+Three-layer alert model:
+  Layer 1 — Hardware support:   device.device_models[0][model_field] == 1
+  Layer 2 — Currently enabled:  device.<root_field> is not None  (0 = supported but off,
+                                                                   1 = supported and on,
+                                                                   None = not present on device)
+  Layer 3 — Currently triggered: unread notification of matching meldungtyp exists
+
 Covers:
 - get_device_info reads model from device.device_models[0]["model"]
 - get_device_info falls back to "Unknown" when device_models is empty or None
-- async_setup_entry (switch + binary_sensor) creates an entity when a supported
-  alert field is 0 (disabled) — not just when it is truthy
-- async_setup_entry does NOT create an entity when an alert field is None
-  (meaning the device does not support that alert type at all)
+- async_setup_entry (switch + binary_sensor):
+    * creates an entity only when BOTH model support is 1 AND root field is not None
+    * creates an entity when root field is 0 (supported but disabled) — not just truthy
+    * does NOT create an entity when model field is 0 (hardware unsupported)
+    * does NOT create an entity when root field is None (field absent on device)
 """
 
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from custom_components.pajgps.coordinator_data import CoordinatorData
-from custom_components.pajgps.const import ALERT_TYPE_TO_DEVICE_FIELD
+from custom_components.pajgps.const import ALERT_TYPE_TO_DEVICE_FIELD, ALERT_TYPE_TO_MODEL_FIELD
 
-from .test_common import make_coordinator, make_device, make_entry_data
+from .test_common import make_coordinator, make_device, ALL_ALERTS_MODEL
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +109,17 @@ def _make_hass_and_config_entry(coordinator):
     return hass, config_entry
 
 
+def _make_model_supporting_only(alert_types: set[int]) -> dict:
+    """
+    Return a device_models entry where only the given alert_types are supported (1),
+    all others set to 0.
+    """
+    return {
+        field: (1 if alert_type in alert_types else 0)
+        for alert_type, field in ALERT_TYPE_TO_MODEL_FIELD.items()
+    }
+
+
 # ---------------------------------------------------------------------------
 # switch.async_setup_entry — entity creation rules
 # ---------------------------------------------------------------------------
@@ -108,7 +127,9 @@ def _make_hass_and_config_entry(coordinator):
 class TestSwitchSetupEntry(unittest.IsolatedAsyncioTestCase):
     """
     Verify that alert switch entities are created according to the
-    'check presence, not truthiness' rule.
+    three-layer model:
+      1. device_models support field must be 1 (hardware supports it)
+      2. root device field must not be None (0 = disabled but present, 1 = enabled)
     """
 
     async def _run_setup(self, device):
@@ -127,58 +148,115 @@ class TestSwitchSetupEntry(unittest.IsolatedAsyncioTestCase):
         await switch_module.async_setup_entry(hass, config_entry, fake_add)
         return added_entities
 
-    async def test_entity_created_when_alert_field_is_zero(self):
-        """
-        A value of 0 means the alert is supported but currently disabled.
-        An entity MUST still be created.
-        """
-        # All alert fields set to 0 (supported but disabled)
-        kwargs = {field: 0 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
-        device = make_device(1, **kwargs)
+    async def test_entity_created_when_model_supports_and_field_is_one(self):
+        """When model support = 1 and root field = 1, entity is created (alert enabled)."""
+        root_kwargs = {field: 1 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[dict(ALL_ALERTS_MODEL)], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), len(ALERT_TYPE_TO_DEVICE_FIELD))
 
-    async def test_entity_created_when_alert_field_is_one(self):
-        """A value of 1 means the alert is supported and enabled — entity must be created."""
-        kwargs = {field: 1 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
-        device = make_device(1, **kwargs)
+    async def test_entity_created_when_model_supports_and_field_is_zero(self):
+        """
+        When model support = 1 and root field = 0, entity is STILL created.
+        0 means supported but currently disabled — entity must exist.
+        """
+        root_kwargs = {field: 0 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[dict(ALL_ALERTS_MODEL)], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), len(ALERT_TYPE_TO_DEVICE_FIELD))
 
-    async def test_no_entity_created_when_alert_field_is_none(self):
+    async def test_no_entity_when_model_does_not_support_alert(self):
         """
-        A value of None means the device does not support that alert type at all.
-        No entity should be created for that type.
+        When model support field = 0, no entity is created regardless of root field value.
+        Hardware doesn't support this alert type.
         """
-        # All alert fields set to None (unsupported)
-        kwargs = {field: None for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
-        device = make_device(1, **kwargs)
+        no_support_model = {field: 0 for field in ALL_ALERTS_MODEL}
+        root_kwargs = {field: 1 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[no_support_model], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), 0)
 
-    async def test_entity_created_only_for_supported_alert_fields(self):
+    async def test_no_entity_when_root_field_is_none(self):
         """
-        When only some alert fields are non-None, only those get entities.
-        The zero-vs-None distinction must be respected for each field individually.
+        When root field is None (field absent on device), no entity is created
+        even if the model advertises support.
         """
-        # Deliberately set first two supported fields to 0, rest to None
-        fields = list(ALERT_TYPE_TO_DEVICE_FIELD.values())
-        supported = set(fields[:2])
-        kwargs = {f: (0 if f in supported else None) for f in fields}
-        device = make_device(1, **kwargs)
+        root_kwargs = {field: None for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[dict(ALL_ALERTS_MODEL)], **root_kwargs)
+
+        entities = await self._run_setup(device)
+
+        self.assertEqual(len(entities), 0)
+
+    async def test_no_entity_when_both_model_unsupported_and_root_none(self):
+        """When neither layer passes, no entity is created."""
+        no_support_model = {field: 0 for field in ALL_ALERTS_MODEL}
+        root_kwargs = {field: None for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[no_support_model], **root_kwargs)
+
+        entities = await self._run_setup(device)
+
+        self.assertEqual(len(entities), 0)
+
+    async def test_entities_created_only_for_model_supported_alerts(self):
+        """
+        When only some alert types are supported by the model,
+        only those alert types get entities (root fields all set to 0).
+        """
+        # Support only the first two alert types
+        supported_types = set(list(ALERT_TYPE_TO_DEVICE_FIELD.keys())[:2])
+        partial_model = _make_model_supporting_only(supported_types)
+        root_kwargs = {field: 0 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[partial_model], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), 2)
 
-    async def test_no_entities_logged_warning_when_no_devices(self):
-        """When there are no devices at all, no entities are added."""
+    async def test_real_world_allround_finder_2g(self):
+        """
+        Simulate the real JSON example for 'Allround FINDER 2G 2.0' (device_models from fixture).
+        Supported: shock, battery, speed, sos.
+        Unsupported: drop, power-cut, ignition, voltage.
+        """
+        # From the JSON fixture:
+        allround_model = {
+            "alarm_erschuetterung": 1,   # shock     (type 1)
+            "alarm_batteriestand": 1,    # battery   (type 2)
+            "alarm_sos": 1,              # sos       (type 4)
+            "alarm_geschwindigkeit": 1,  # speed     (type 5)
+            "alarm_stromunterbrechung": 0,
+            "alarm_zuendalarm": 0,
+            "alarm_drop": 0,
+            "alarm_volt": 0,
+        }
+        # Root fields from JSON (alarmbewegung=0, alarmsos=1, etc.)
+        device = make_device(
+            1,
+            device_models=[allround_model],
+            alarmbewegung=0,
+            alarmakkuwarnung=1,
+            alarmsos=1,
+            alarmgeschwindigkeit=0,
+            alarmstromunterbrechung=0,
+            alarmzuendalarm=0,
+            alarm_fall_enabled=0,
+            alarm_volt=0,
+        )
+
+        entities = await self._run_setup(device)
+
+        # Only 4 types are hardware-supported: shock(1), battery(2), sos(4), speed(5)
+        self.assertEqual(len(entities), 4)
+
+    async def test_no_entities_warning_logged_when_no_devices(self):
+        """When there are no devices at all, no entities are added and a warning is logged."""
         from custom_components.pajgps import switch as switch_module
 
         coord = make_coordinator()
@@ -204,7 +282,7 @@ class TestSwitchSetupEntry(unittest.IsolatedAsyncioTestCase):
 class TestBinarySensorSetupEntry(unittest.IsolatedAsyncioTestCase):
     """
     Verify that alert binary sensor entities are created according to the
-    'check presence, not truthiness' rule.
+    same three-layer model as switches.
     """
 
     async def _run_setup(self, device):
@@ -223,54 +301,95 @@ class TestBinarySensorSetupEntry(unittest.IsolatedAsyncioTestCase):
         await bs_module.async_setup_entry(hass, config_entry, fake_add)
         return added_entities
 
-    async def test_entity_created_when_alert_field_is_zero(self):
-        """
-        A value of 0 means the alert is supported but currently disabled.
-        A binary sensor entity MUST still be created.
-        """
-        kwargs = {field: 0 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
-        device = make_device(1, **kwargs)
+    async def test_entity_created_when_model_supports_and_field_is_one(self):
+        """When model support = 1 and root field = 1, entity is created."""
+        root_kwargs = {field: 1 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[dict(ALL_ALERTS_MODEL)], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), len(ALERT_TYPE_TO_DEVICE_FIELD))
 
-    async def test_entity_created_when_alert_field_is_one(self):
-        """A value of 1 means the alert is supported and enabled — entity must be created."""
-        kwargs = {field: 1 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
-        device = make_device(1, **kwargs)
+    async def test_entity_created_when_model_supports_and_field_is_zero(self):
+        """
+        When model support = 1 and root field = 0, entity is STILL created.
+        0 means supported but currently disabled — entity must still be present.
+        """
+        root_kwargs = {field: 0 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[dict(ALL_ALERTS_MODEL)], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), len(ALERT_TYPE_TO_DEVICE_FIELD))
 
-    async def test_no_entity_created_when_alert_field_is_none(self):
-        """
-        A value of None means the device does not support that alert type at all.
-        No binary sensor entity should be created for that type.
-        """
-        kwargs = {field: None for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
-        device = make_device(1, **kwargs)
+    async def test_no_entity_when_model_does_not_support_alert(self):
+        """When model support field = 0, no entity is created regardless of root field value."""
+        no_support_model = {field: 0 for field in ALL_ALERTS_MODEL}
+        root_kwargs = {field: 1 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[no_support_model], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), 0)
 
-    async def test_entity_created_only_for_supported_alert_fields(self):
+    async def test_no_entity_when_root_field_is_none(self):
+        """When root field is None, no entity is created even if model supports it."""
+        root_kwargs = {field: None for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[dict(ALL_ALERTS_MODEL)], **root_kwargs)
+
+        entities = await self._run_setup(device)
+
+        self.assertEqual(len(entities), 0)
+
+    async def test_entities_created_only_for_model_supported_alerts(self):
         """
-        When only some alert fields are non-None, only those get entities.
-        The zero-vs-None distinction must be respected for each field individually.
+        When only some alert types are supported by the model,
+        only those get entities (root fields all set to 0).
         """
-        fields = list(ALERT_TYPE_TO_DEVICE_FIELD.values())
-        supported = set(fields[:3])
-        kwargs = {f: (0 if f in supported else None) for f in fields}
-        device = make_device(1, **kwargs)
+        supported_types = set(list(ALERT_TYPE_TO_DEVICE_FIELD.keys())[:3])
+        partial_model = _make_model_supporting_only(supported_types)
+        root_kwargs = {field: 0 for field in ALERT_TYPE_TO_DEVICE_FIELD.values()}
+        device = make_device(1, device_models=[partial_model], **root_kwargs)
 
         entities = await self._run_setup(device)
 
         self.assertEqual(len(entities), 3)
 
-    async def test_no_entities_logged_warning_when_no_devices(self):
+    async def test_real_world_usb_gps_finder_4g(self):
+        """
+        Simulate the real JSON example for 'USB GPS Finder 4G' (device_models from fixture).
+        Supported: sos, speed, voltage.
+        Unsupported: shock, battery, drop, power-cut, ignition.
+        """
+        usb_finder_model = {
+            "alarm_erschuetterung": 0,   # shock     (type 1) — NOT supported
+            "alarm_batteriestand": 0,    # battery   (type 2) — NOT supported
+            "alarm_sos": 1,              # sos       (type 4)
+            "alarm_geschwindigkeit": 1,  # speed     (type 5)
+            "alarm_stromunterbrechung": 0,
+            "alarm_zuendalarm": 0,
+            "alarm_drop": 0,
+            "alarm_volt": 1,             # voltage   (type 13)
+        }
+        device = make_device(
+            1,
+            device_models=[usb_finder_model],
+            alarmbewegung=0,
+            alarmakkuwarnung=0,
+            alarmsos=0,
+            alarmgeschwindigkeit=0,
+            alarmstromunterbrechung=0,
+            alarmzuendalarm=0,
+            alarm_fall_enabled=0,
+            alarm_volt=0,
+        )
+
+        entities = await self._run_setup(device)
+
+        # Only 3 types are hardware-supported: sos(4), speed(5), voltage(13)
+        self.assertEqual(len(entities), 3)
+
+    async def test_no_entities_warning_logged_when_no_devices(self):
         """When there are no devices at all, no entities are added and a warning is logged."""
         from custom_components.pajgps import binary_sensor as bs_module
 
