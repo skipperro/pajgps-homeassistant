@@ -6,11 +6,11 @@ from __future__ import annotations
 import logging
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
-from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .const import DOMAIN, SENSOR_MODEL_FIELDS
+from .const import SENSOR_MODEL_FIELDS
 from .coordinator import PajGpsCoordinator
+from .__init__ import PajGpsConfigEntry
 _LOGGER = logging.getLogger(__name__)
 class PajGPSVoltageSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
     """Voltage sensor reading from coordinator sensor_data."""
@@ -140,11 +140,11 @@ class PajGPSElevationSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: config_entries.ConfigEntry,
+    config_entry: PajGpsConfigEntry,
     async_add_entities,
 ) -> None:
     """Set up PAJ GPS sensor entities from a config entry."""
-    coordinator: PajGpsCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: PajGpsCoordinator = config_entry.runtime_data
     fetch_elevation = config_entry.data.get("fetch_elevation", False)
     force_battery = config_entry.data.get("force_battery", False)
     entities = []

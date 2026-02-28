@@ -6,12 +6,11 @@ from __future__ import annotations
 
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.core import HomeAssistant
-from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import PajGpsCoordinator
+from .__init__ import PajGpsConfigEntry
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,11 +56,11 @@ class PajGPSPositionSensor(CoordinatorEntity[PajGpsCoordinator], TrackerEntity):
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: config_entries.ConfigEntry,
+    config_entry: PajGpsConfigEntry,
     async_add_entities,
 ) -> None:
     """Set up PAJ GPS tracker entities from a config entry."""
-    coordinator: PajGpsCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: PajGpsCoordinator = config_entry.runtime_data
 
     entities = [
         PajGPSPositionSensor(coordinator, device.id)

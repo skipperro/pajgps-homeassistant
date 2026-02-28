@@ -6,11 +6,11 @@ from __future__ import annotations
 import logging
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from homeassistant.core import HomeAssistant
-from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .const import DOMAIN, ALERT_NAMES, ALERT_TYPE_TO_DEVICE_FIELD, ALERT_TYPE_TO_MODEL_FIELD
+from .const import ALERT_NAMES, ALERT_TYPE_TO_DEVICE_FIELD, ALERT_TYPE_TO_MODEL_FIELD
 from .coordinator import PajGpsCoordinator
+from .__init__ import PajGpsConfigEntry
 _LOGGER = logging.getLogger(__name__)
 class PajGPSAlertSensor(CoordinatorEntity[PajGpsCoordinator], BinarySensorEntity):
     """Binary sensor that is ON when an unread notification of a given type exists."""
@@ -39,11 +39,11 @@ class PajGPSAlertSensor(CoordinatorEntity[PajGpsCoordinator], BinarySensorEntity
         return "mdi:bell-alert" if self.is_on else "mdi:bell"
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: config_entries.ConfigEntry,
+    config_entry: PajGpsConfigEntry,
     async_add_entities,
 ) -> None:
     """Set up PAJ GPS binary sensor (alert) entities from a config entry."""
-    coordinator: PajGpsCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: PajGpsCoordinator = config_entry.runtime_data
     entities = []
     for device in coordinator.data.devices:
         if device.id is None:

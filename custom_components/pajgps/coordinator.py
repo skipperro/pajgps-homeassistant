@@ -24,7 +24,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pajgps_api import PajGpsApi
 from pajgps_api.pajgps_api_error import PajGpsApiError, AuthenticationError, TokenRefreshError
 from pajgps_api.models.trackpoint import TrackPoint
-from pajgps_api.models.sensordata import SensorData
 from pajgps_api.models.notification import Notification
 
 from .const import (

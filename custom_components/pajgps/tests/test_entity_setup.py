@@ -102,9 +102,9 @@ def _make_hass_and_config_entry(coordinator):
     """Return a fake hass and config_entry wired to the given coordinator."""
     config_entry = MagicMock()
     config_entry.entry_id = "test_entry_id"
+    config_entry.runtime_data = coordinator
 
     hass = MagicMock()
-    hass.data = {"pajgps": {"test_entry_id": coordinator}}
 
     return hass, config_entry
 
