@@ -195,8 +195,11 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
         async def _collect_sensor(device_id: int, fut: asyncio.Future) -> None:
             try:
-                sensor: SensorData = await fut
-                if sensor is None:
+                sensor = await fut
+                if sensor is None or sensor == []:
+                    return
+                if sensor is not SensorData:
+                    _LOGGER.debug("Unexpected sensor data format for device %s: %s", device_id, sensor)
                     return
                 new_sensors = dict(self.data.sensor_data)
                 new_sensors[device_id] = sensor
@@ -204,7 +207,13 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     dataclasses.replace(self.data, sensor_data=new_sensors)
                 )
             except Exception as exc:  # noqa: BLE001
-                _LOGGER.warning("Failed to fetch sensor data for device %s: %s", device_id, exc)
+                # The pajgps-api library raises "Unexpected response format: []" when the
+                # device has no sensor hardware and the endpoint returns an empty array.
+                # This is expected for basic trackers — log at DEBUG, not WARNING.
+                if "Unexpected response format" in str(exc):
+                    _LOGGER.debug("No sensor data for device %s (device may lack sensors)", device_id)
+                else:
+                    _LOGGER.warning("Failed to fetch sensor data for device %s: %s", device_id, exc)
 
         await asyncio.gather(
             *[_collect_sensor(did, fut) for did, fut in sensor_futures.items()],
