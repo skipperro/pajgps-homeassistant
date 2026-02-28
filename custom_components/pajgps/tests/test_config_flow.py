@@ -22,7 +22,9 @@ from __future__ import annotations
 import unittest
 import uuid
 from typing import Any, Dict
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch, AsyncMock
+
+from homeassistant.data_entry_flow import AbortFlow
 
 from custom_components.pajgps.config_flow import CustomFlow, OptionsFlowHandler
 
@@ -106,7 +108,8 @@ class TestCustomFlow(unittest.IsolatedAsyncioTestCase):
         """Valid full input must create an entry with correct title and all data fields."""
         flow = _make_flow()
 
-        result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
 
         self.assertEqual(result["type"], "create_entry")
         self.assertEqual(result["title"], VALID_USER_INPUT["entry_name"])
@@ -123,7 +126,8 @@ class TestCustomFlow(unittest.IsolatedAsyncioTestCase):
         """A fresh UUID must be generated and stored as 'guid' in entry data."""
         flow = _make_flow()
 
-        result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
 
         self.assertIn("guid", result["data"])
         generated_guid = result["data"]["guid"]
@@ -165,9 +169,40 @@ class TestCustomFlow(unittest.IsolatedAsyncioTestCase):
         """Valid input must produce no errors dict key."""
         flow = _make_flow()
 
-        result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
 
         self.assertNotEqual(result["type"], "form")
+
+    async def test_duplicate_email_aborts_flow(self):
+        """If an entry with the same email already exists, _async_abort_entries_match
+        is called with the email and raises AbortFlow, which propagates out of the flow."""
+        flow = _make_flow()
+
+        with self.assertRaises(AbortFlow) as ctx:
+            with patch.object(flow, "_async_abort_entries_match", side_effect=AbortFlow("already_configured")):
+                await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+
+        self.assertEqual(str(ctx.exception.reason), "already_configured")
+
+    async def test_duplicate_check_uses_email_as_key(self):
+        """_async_abort_entries_match must be called with the email from user input."""
+        flow = _make_flow()
+
+        with patch.object(flow, "_async_abort_entries_match") as mock_abort_match, \
+             patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+
+        mock_abort_match.assert_called_once_with({"email": VALID_USER_INPUT["email"]})
+
+    async def test_duplicate_check_skipped_when_fields_are_empty(self):
+        """_async_abort_entries_match must NOT be called when empty-field errors are present."""
+        flow = _make_flow()
+
+        with patch.object(flow, "_async_abort_entries_match") as mock_abort_match:
+            await flow.async_step_user(user_input=dict(VALID_USER_INPUT, email=""))
+
+        mock_abort_match.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +273,8 @@ class TestOptionsFlowHandler(unittest.IsolatedAsyncioTestCase):
         """Valid user input must return CREATE_ENTRY with updated field values."""
         handler = _make_options_flow(VALID_ENTRY_DATA)
 
-        result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
 
         self.assertEqual(result["type"], "create_entry")
         data = result["data"]
@@ -253,7 +289,8 @@ class TestOptionsFlowHandler(unittest.IsolatedAsyncioTestCase):
         """The original guid from config_entry.data must be preserved after an options update."""
         handler = _make_options_flow(VALID_ENTRY_DATA)
 
-        result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
 
         self.assertEqual(result["data"]["guid"], VALID_ENTRY_DATA["guid"])
 
@@ -261,7 +298,8 @@ class TestOptionsFlowHandler(unittest.IsolatedAsyncioTestCase):
         """hass.config_entries.async_update_entry must be called once with the new data."""
         handler = _make_options_flow(VALID_ENTRY_DATA)
 
-        await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
 
         handler.hass.config_entries.async_update_entry.assert_called_once()
         call_kwargs = handler.hass.config_entries.async_update_entry.call_args
@@ -292,6 +330,173 @@ class TestOptionsFlowHandler(unittest.IsolatedAsyncioTestCase):
         """Valid input must not produce an errors dict."""
         handler = _make_options_flow(VALID_ENTRY_DATA)
 
-        result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+        with patch("custom_components.pajgps.config_flow._validate_credentials", new=AsyncMock(return_value=None)):
+            result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
 
         self.assertNotEqual(result["type"], "form")
+
+
+# ---------------------------------------------------------------------------
+# Credential validation — CustomFlow
+# ---------------------------------------------------------------------------
+
+class TestCustomFlowCredentialValidation(unittest.IsolatedAsyncioTestCase):
+    """Tests for _validate_credentials being called inside CustomFlow.async_step_user."""
+
+    async def test_cannot_connect_returns_form_with_error(self):
+        """When the API is unreachable, form must show cannot_connect error."""
+        flow = _make_flow()
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value="cannot_connect"),
+        ):
+            result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"]["base"], "cannot_connect")
+
+    async def test_invalid_auth_returns_form_with_error(self):
+        """When credentials are rejected by the API, form must show invalid_auth error."""
+        flow = _make_flow()
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value="invalid_auth"),
+        ):
+            result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"]["base"], "invalid_auth")
+
+    async def test_valid_credentials_create_entry(self):
+        """When _validate_credentials returns None, the entry must be created."""
+        flow = _make_flow()
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value=None),
+        ):
+            result = await flow.async_step_user(user_input=dict(VALID_USER_INPUT))
+
+        self.assertEqual(result["type"], "create_entry")
+
+    async def test_credential_check_skipped_when_fields_are_empty(self):
+        """_validate_credentials must NOT be called when empty-field errors are present."""
+        flow = _make_flow()
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value=None),
+        ) as mock_validate:
+            await flow.async_step_user(user_input=dict(VALID_USER_INPUT, email=""))
+
+        mock_validate.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Credential validation — OptionsFlowHandler
+# ---------------------------------------------------------------------------
+
+class TestOptionsFlowCredentialValidation(unittest.IsolatedAsyncioTestCase):
+    """Tests for _validate_credentials being called inside OptionsFlowHandler.async_step_init."""
+
+    async def test_cannot_connect_returns_form_with_error(self):
+        """When the API is unreachable, form must show cannot_connect error."""
+        handler = _make_options_flow(VALID_ENTRY_DATA)
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value="cannot_connect"),
+        ):
+            result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"]["base"], "cannot_connect")
+
+    async def test_invalid_auth_returns_form_with_error(self):
+        """When credentials are rejected by the API, form must show invalid_auth error."""
+        handler = _make_options_flow(VALID_ENTRY_DATA)
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value="invalid_auth"),
+        ):
+            result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["errors"]["base"], "invalid_auth")
+
+    async def test_valid_credentials_create_entry(self):
+        """When _validate_credentials returns None, the entry must be created."""
+        handler = _make_options_flow(VALID_ENTRY_DATA)
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value=None),
+        ):
+            result = await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT))
+
+        self.assertEqual(result["type"], "create_entry")
+
+    async def test_credential_check_skipped_when_fields_are_empty(self):
+        """_validate_credentials must NOT be called when empty-field errors are present."""
+        handler = _make_options_flow(VALID_ENTRY_DATA)
+
+        with patch(
+            "custom_components.pajgps.config_flow._validate_credentials",
+            new=AsyncMock(return_value=None),
+        ) as mock_validate:
+            await handler.async_step_init(user_input=dict(VALID_OPTIONS_INPUT, password=""))
+
+        mock_validate.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _validate_credentials unit tests (the helper itself)
+# ---------------------------------------------------------------------------
+
+class TestValidateCredentials(unittest.IsolatedAsyncioTestCase):
+    """Unit tests for the _validate_credentials module-level helper."""
+
+    async def test_returns_none_on_successful_login(self):
+        """A successful api.login() call must return None (no error)."""
+        from custom_components.pajgps.config_flow import _validate_credentials
+
+        with patch("custom_components.pajgps.config_flow.PajGpsApi") as MockApi:
+            MockApi.return_value.login = AsyncMock()
+            result = await _validate_credentials("user@example.com", "secret")
+
+        self.assertIsNone(result)
+
+    async def test_returns_invalid_auth_on_authentication_error(self):
+        """AuthenticationError from login() must map to 'invalid_auth'."""
+        from custom_components.pajgps.config_flow import _validate_credentials
+        from pajgps_api.pajgps_api_error import AuthenticationError
+
+        with patch("custom_components.pajgps.config_flow.PajGpsApi") as MockApi:
+            MockApi.return_value.login = AsyncMock(side_effect=AuthenticationError("bad creds"))
+            result = await _validate_credentials("user@example.com", "wrong")
+
+        self.assertEqual(result, "invalid_auth")
+
+    async def test_returns_invalid_auth_on_token_refresh_error(self):
+        """TokenRefreshError from login() must map to 'invalid_auth'."""
+        from custom_components.pajgps.config_flow import _validate_credentials
+        from pajgps_api.pajgps_api_error import TokenRefreshError
+
+        with patch("custom_components.pajgps.config_flow.PajGpsApi") as MockApi:
+            MockApi.return_value.login = AsyncMock(side_effect=TokenRefreshError("refresh failed"))
+            result = await _validate_credentials("user@example.com", "secret")
+
+        self.assertEqual(result, "invalid_auth")
+
+    async def test_returns_cannot_connect_on_generic_exception(self):
+        """Any unexpected exception from login() must map to 'cannot_connect'."""
+        from custom_components.pajgps.config_flow import _validate_credentials
+
+        with patch("custom_components.pajgps.config_flow.PajGpsApi") as MockApi:
+            MockApi.return_value.login = AsyncMock(side_effect=ConnectionError("timeout"))
+            result = await _validate_credentials("user@example.com", "secret")
+
+        self.assertEqual(result, "cannot_connect")

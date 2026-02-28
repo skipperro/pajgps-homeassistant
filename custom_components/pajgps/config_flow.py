@@ -9,6 +9,9 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 
+from pajgps_api import PajGpsApi
+from pajgps_api.pajgps_api_error import AuthenticationError, TokenRefreshError
+
 from .const import DOMAIN
 
 big_int = vol.All(vol.Coerce(int), vol.Range(min=300))
@@ -26,6 +29,21 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Required('force_battery', default=False): cv.boolean,
             }
         )
+
+async def _validate_credentials(email: str, password: str) -> str | None:
+    """
+    Attempt a real login with the given credentials.
+    Returns an error key string on failure, or None on success.
+    """
+    try:
+        api = PajGpsApi(email=email, password=password)
+        await api.login()
+    except (AuthenticationError, TokenRefreshError):
+        return "invalid_auth"
+    except Exception:  # noqa: BLE001
+        return "cannot_connect"
+    return None
+
 
 class CustomFlow(config_entries.ConfigFlow, domain=DOMAIN):
     data: Optional[Dict[str, Any]]
@@ -45,6 +63,11 @@ class CustomFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # If password is null or empty string, add error
             if not self.data['password'] or self.data['password'] == '':
                 errors['base'] = 'password_required'
+            if not errors:
+                self._async_abort_entries_match({"email": self.data["email"]})
+                error_key = await _validate_credentials(self.data['email'], self.data['password'])
+                if error_key:
+                    errors['base'] = error_key
             if not errors:
                 return self.async_create_entry(title=f"{self.data['entry_name']}", data=self.data)
 
@@ -105,6 +128,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # If password is null or empty string, add error
             if not user_input['password'] or user_input['password'] == '':
                 errors['base'] = 'password_required'
+            if not errors:
+                error_key = await _validate_credentials(user_input['email'], user_input['password'])
+                if error_key:
+                    errors['base'] = error_key
             if not errors:
                 # Update the config entry with the new data and let the
                 # _async_update_listener in __init__.py reload the coordinator.

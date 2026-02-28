@@ -3,7 +3,10 @@
     "error": {
       "entry_name_required": "Please enter a name for the entry.",
       "email_required": "Please enter your e-mail address.",
-      "password_required": "Please enter your password."
+      "password_required": "Please enter your password.",
+      "cannot_connect": "Unable to reach the PAJ GPS API. Please check your network connection.",
+      "invalid_auth": "Invalid e-mail or password. Please check your credentials.",
+      "already_configured": "An account with this e-mail address is already configured."
     },
     "step": {
       "user": {
@@ -32,7 +35,10 @@
     "error": {
       "entry_name_required": "Please enter a name for the entry.",
       "email_required": "Please enter your e-mail address.",
-      "password_required": "Please enter your password."
+      "password_required": "Please enter your password.",
+      "cannot_connect": "Unable to reach the PAJ GPS API. Please check your network connection.",
+      "invalid_auth": "Invalid e-mail or password. Please check your credentials.",
+      "already_configured": "An account with this e-mail address is already configured."
     },
     "step": {
       "init": {

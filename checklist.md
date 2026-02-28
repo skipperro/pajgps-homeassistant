@@ -23,10 +23,11 @@
 > As far as I can tell, there are no entity events in this integration
 - [x] `entity-unique-id` - Entities have a unique ID
 - [x] `has-entity-name` - Entities use has_entity_name = True
-- [ ] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
-- [ ] `test-before-configure` - Test a connection in the config flow
-- [ ] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
-- [ ] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
+- [x] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
+- [x] `test-before-configure` - Test a connection in the config flow
+- [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
+- [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
+> Email is used as unique identifier, so only one account can be set up, but it can have multiple devices
 
 ## Silver
 - [ ] `action-exceptions` - Service actions raise exceptions when encountering failures
