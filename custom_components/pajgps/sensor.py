@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .const import DOMAIN
+from .const import DOMAIN, SENSOR_MODEL_FIELDS
 from .coordinator import PajGpsCoordinator
 _LOGGER = logging.getLogger(__name__)
 class PajGPSVoltageSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
@@ -155,12 +155,20 @@ async def async_setup_entry(
     for device in coordinator.data.devices:
         if device.id is None:
             continue
+        model = device.device_models[0] if device.device_models else {}
+
         entities.append(PajGPSSpeedSensor(coordinator, device.id))
-        entities.append(PajGPSVoltageSensor(coordinator, device.id))
-        # Battery: only if device model supports it or user forced it
-        has_battery = getattr(device, "last_battery", None) is not None
+
+        # Voltage: only if device model has a voltage sensor (alarm_volt == 1 in device_models)
+        if model.get(SENSOR_MODEL_FIELDS["voltage"]):
+            entities.append(PajGPSVoltageSensor(coordinator, device.id))
+
+        # Battery: device_models.standalone_battery > 0 means a real battery is present.
+        # The user can also force-add it regardless (force_battery config option).
+        has_battery = model.get(SENSOR_MODEL_FIELDS["battery"], 0) > 0
         if has_battery or force_battery:
             entities.append(PajGPSBatterySensor(coordinator, device.id))
+
         if fetch_elevation:
             entities.append(PajGPSElevationSensor(coordinator, device.id))
     if entities:

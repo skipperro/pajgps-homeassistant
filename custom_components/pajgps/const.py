@@ -6,6 +6,13 @@ ALERT_NAMES = {1: "Shock Alert", 2: "Battery Alert", 3: "Radius Alert", 4: "SOS 
                9: "Drop Alert", 10: "Area Enter Alert", 11: "Area Leave Alert",
                13: "Voltage Alert", 22: "Turn off Alert"}
 
+# Maps sensor type name → device_models[0] field that indicates hardware support.
+# A value of 1 means the device model has that sensor; 0 or negative means it does not.
+SENSOR_MODEL_FIELDS: dict[str, str] = {
+    "voltage":  "alarm_volt",          # voltage sensor (hardware volt measurement)
+    "battery":  "standalone_battery",  # standalone battery (1 = has battery, <=0 = no battery)
+}
+
 # Maps alert_type int → device_models[0] field that indicates hardware support.
 # A value of 1 means the device model supports this alert type; 0 means it does not.
 ALERT_TYPE_TO_MODEL_FIELD: dict[int, str] = {

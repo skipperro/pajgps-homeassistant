@@ -407,3 +407,161 @@ class TestBinarySensorSetupEntry(unittest.IsolatedAsyncioTestCase):
             mock_logger.warning.assert_called_once()
 
         self.assertEqual(len(added_entities), 0)
+
+
+# ---------------------------------------------------------------------------
+# sensor.async_setup_entry — voltage / battery / speed / elevation rules
+# ---------------------------------------------------------------------------
+
+class TestSensorSetupEntry(unittest.IsolatedAsyncioTestCase):
+    """
+    Verify that sensor entities are gated on device_models capability fields:
+      - PajGPSVoltageSensor  → only when device_models[0].alarm_volt == 1
+      - PajGPSBatterySensor  → only when device_models[0].standalone_battery > 0
+                               (or force_battery config option overrides)
+      - PajGPSSpeedSensor    → always (every device has speed data)
+      - PajGPSElevationSensor → only when fetch_elevation config option is True
+    """
+
+    async def _run_setup(self, device, fetch_elevation=False, force_battery=False):
+        """Run async_setup_entry for the sensor platform and return added entities."""
+        from custom_components.pajgps import sensor as sensor_module
+
+        coord = make_coordinator(fetch_elevation=fetch_elevation, force_battery=force_battery)
+        coord.data = CoordinatorData(devices=[device])
+        hass, config_entry = _make_hass_and_config_entry(coord)
+
+        # sensor.py reads these from config_entry.data, not from coordinator entry_data
+        config_entry.data = {
+            "fetch_elevation": fetch_elevation,
+            "force_battery": force_battery,
+        }
+
+        added_entities = []
+
+        def fake_add(entities, **kwargs):
+            added_entities.extend(entities)
+
+        await sensor_module.async_setup_entry(hass, config_entry, fake_add)
+        return added_entities
+
+    def _entity_types(self, entities) -> list[str]:
+        return [type(e).__name__ for e in entities]
+
+    async def test_voltage_sensor_created_when_model_supports_it(self):
+        """alarm_volt == 1 in device_models → voltage sensor entity must be created."""
+        device = make_device(1, device_models=[{**ALL_ALERTS_MODEL, "alarm_volt": 1, "standalone_battery": 1}])
+
+        entities = await self._run_setup(device)
+
+        self.assertIn("PajGPSVoltageSensor", self._entity_types(entities))
+
+    async def test_voltage_sensor_not_created_when_model_does_not_support_it(self):
+        """alarm_volt == 0 in device_models → no voltage sensor, even though root field exists."""
+        device = make_device(1, device_models=[{**ALL_ALERTS_MODEL, "alarm_volt": 0, "standalone_battery": 1}])
+
+        entities = await self._run_setup(device)
+
+        self.assertNotIn("PajGPSVoltageSensor", self._entity_types(entities))
+
+    async def test_voltage_sensor_not_created_when_device_models_is_empty(self):
+        """No device_models at all → no voltage sensor."""
+        device = make_device(1, device_models=[])
+
+        entities = await self._run_setup(device)
+
+        self.assertNotIn("PajGPSVoltageSensor", self._entity_types(entities))
+
+    async def test_battery_sensor_created_when_standalone_battery_is_positive(self):
+        """standalone_battery == 1 → battery sensor must be created."""
+        device = make_device(1, device_models=[{**ALL_ALERTS_MODEL, "standalone_battery": 1}])
+
+        entities = await self._run_setup(device)
+
+        self.assertIn("PajGPSBatterySensor", self._entity_types(entities))
+
+    async def test_battery_sensor_not_created_when_standalone_battery_is_zero(self):
+        """standalone_battery == 0 (or absent) → no battery sensor."""
+        device = make_device(1, device_models=[{**ALL_ALERTS_MODEL, "standalone_battery": 0}])
+
+        entities = await self._run_setup(device)
+
+        self.assertNotIn("PajGPSBatterySensor", self._entity_types(entities))
+
+    async def test_battery_sensor_not_created_when_standalone_battery_is_negative(self):
+        """standalone_battery == -1 (USB-powered device) → no battery sensor."""
+        device = make_device(1, device_models=[{**ALL_ALERTS_MODEL, "standalone_battery": -1}])
+
+        entities = await self._run_setup(device)
+
+        self.assertNotIn("PajGPSBatterySensor", self._entity_types(entities))
+
+    async def test_battery_sensor_created_when_force_battery_overrides(self):
+        """force_battery=True creates a battery sensor even when model says no battery."""
+        device = make_device(1, device_models=[{**ALL_ALERTS_MODEL, "standalone_battery": -1}])
+
+        entities = await self._run_setup(device, force_battery=True)
+
+        self.assertIn("PajGPSBatterySensor", self._entity_types(entities))
+
+    async def test_speed_sensor_always_created(self):
+        """Speed sensor is created for every device regardless of model."""
+        device = make_device(1, device_models=[])
+
+        entities = await self._run_setup(device)
+
+        self.assertIn("PajGPSSpeedSensor", self._entity_types(entities))
+
+    async def test_elevation_sensor_created_when_option_enabled(self):
+        """Elevation sensor is created only when fetch_elevation is True."""
+        device = make_device(1)
+
+        entities = await self._run_setup(device, fetch_elevation=True)
+
+        self.assertIn("PajGPSElevationSensor", self._entity_types(entities))
+
+    async def test_elevation_sensor_not_created_when_option_disabled(self):
+        """Elevation sensor is NOT created when fetch_elevation is False."""
+        device = make_device(1)
+
+        entities = await self._run_setup(device, fetch_elevation=False)
+
+        self.assertNotIn("PajGPSElevationSensor", self._entity_types(entities))
+
+    async def test_real_world_allround_finder_2g_sensors(self):
+        """
+        Allround FINDER 2G 2.0: alarm_volt=0, standalone_battery=1.
+        Expected: speed + battery, NO voltage.
+        """
+        allround_model = {
+            "model": "Allround FINDER 2G 2.0",
+            "alarm_volt": 0,
+            "standalone_battery": 1,
+        }
+        device = make_device(1, device_models=[allround_model])
+
+        entities = await self._run_setup(device)
+        types = self._entity_types(entities)
+
+        self.assertIn("PajGPSSpeedSensor", types)
+        self.assertIn("PajGPSBatterySensor", types)
+        self.assertNotIn("PajGPSVoltageSensor", types)
+
+    async def test_real_world_usb_gps_finder_4g_sensors(self):
+        """
+        USB GPS Finder 4G: alarm_volt=1, standalone_battery=-1.
+        Expected: speed + voltage, NO battery.
+        """
+        usb_model = {
+            "model": "USB GPS Finder 4G",
+            "alarm_volt": 1,
+            "standalone_battery": -1,
+        }
+        device = make_device(1, device_models=[usb_model])
+
+        entities = await self._run_setup(device)
+        types = self._entity_types(entities)
+
+        self.assertIn("PajGPSSpeedSensor", types)
+        self.assertIn("PajGPSVoltageSensor", types)
+        self.assertNotIn("PajGPSBatterySensor", types)
