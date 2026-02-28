@@ -1,5 +1,5 @@
 DOMAIN = "pajgps"
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 ALERT_NAMES = {1: "Shock Alert", 2: "Battery Alert", 3: "Radius Alert", 4: "SOS Alert",
                5: "Speed Alert", 6: "Power Cut-off Alert", 7: "Ignition Alert",

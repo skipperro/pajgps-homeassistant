@@ -37,7 +37,7 @@ class PajGPSVoltageSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
         sd = self.coordinator.data.sensor_data.get(self._device_id)
         if sd is None or sd.volt is None:
             return None
-        value = float(sd.volt)
+        value = float(sd.volt / 1000.0)  # API gives millivolts, convert to volts
         return max(0.0, min(300.0, value))
 
 class PajGPSBatterySensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):

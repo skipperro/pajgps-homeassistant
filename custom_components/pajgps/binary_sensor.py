@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant import config_entries
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .const import DOMAIN, ALERT_NAMES
+from .const import DOMAIN, ALERT_NAMES, ALERT_TYPE_TO_DEVICE_FIELD
 from .coordinator import PajGpsCoordinator
 _LOGGER = logging.getLogger(__name__)
 class PajGPSAlertSensor(CoordinatorEntity[PajGpsCoordinator], BinarySensorEntity):
@@ -45,23 +45,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up PAJ GPS binary sensor (alert) entities from a config entry."""
     coordinator: PajGpsCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    # Maps alarm capability field → alert_type int
-    alarm_fields = [
-        ("alarmbewegung", 1),           # Shock
-        ("alarmakkuwarnung", 2),         # Battery
-        ("alarmsos", 4),                 # SOS
-        ("alarmgeschwindigkeit", 5),     # Speed
-        ("alarmstromunterbrechung", 6),  # Power cut-off
-        ("alarmzuendalarm", 7),          # Ignition
-        ("alarm_fall_enabled", 9),       # Drop
-        ("alarm_volt", 13),              # Voltage
-    ]
     entities = []
     for device in coordinator.data.devices:
         if device.id is None:
             continue
-        for field, alert_type in alarm_fields:
-            if getattr(device, field, None):
+        for alert_type, field in ALERT_TYPE_TO_DEVICE_FIELD.items():
+            # Check presence (is not None), not truthiness — a value of 0 means
+            # the alert is supported but currently disabled; it still needs an entity.
+            if getattr(device, field, None) is not None:
                 entities.append(PajGPSAlertSensor(coordinator, device.id, alert_type))
     if entities:
         async_add_entities(entities)
