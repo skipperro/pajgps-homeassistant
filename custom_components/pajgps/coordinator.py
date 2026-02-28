@@ -368,7 +368,7 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
                     "identifiers": {(DOMAIN, f"{self._entry_data['guid']}_{device_id}")},
                     "name": device.name or f"PAJ GPS {device_id}",
                     "manufacturer": "PAJ GPS",
-                    "model": str(device.modellid) if device.modellid else "Unknown",
+                    "model": (device.device_models[0]["model"] if device.device_models else None) or "Unknown",
                     "sw_version": VERSION,
                 }
         return None
