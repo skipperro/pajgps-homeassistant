@@ -1,13 +1,5 @@
 {
   "config": {
-    "error": {
-      "entry_name_required": "Please enter a name for the entry.",
-      "email_required": "Please enter your e-mail address.",
-      "password_required": "Please enter your password.",
-      "cannot_connect": "Unable to reach the PAJ GPS API. Please check your network connection.",
-      "invalid_auth": "Invalid e-mail or password. Please check your credentials.",
-      "already_configured": "An account with this e-mail address is already configured."
-    },
     "step": {
       "user": {
         "data": {
@@ -27,19 +19,19 @@
           "force_battery": "Force creation of battery sensor for devices without battery defined in API"
         },
         "description": "Set credentials for PAJ GPS account (finder-portal.com).",
-        "title": "PAJ GPS Configuration"
+        "title": "PAJ GPS Configuration",
+        "error": {
+          "entry_name_required": "Please enter a name for the entry.",
+          "email_required": "Please enter your e-mail address.",
+          "password_required": "Please enter your password.",
+          "cannot_connect": "Unable to reach the PAJ GPS API. Please check your network connection.",
+          "invalid_auth": "Invalid e-mail or password. Please check your credentials.",
+          "already_configured": "An account with this e-mail address is already configured."
+        }
       }
     }
   },
   "options": {
-    "error": {
-      "entry_name_required": "Please enter a name for the entry.",
-      "email_required": "Please enter your e-mail address.",
-      "password_required": "Please enter your password.",
-      "cannot_connect": "Unable to reach the PAJ GPS API. Please check your network connection.",
-      "invalid_auth": "Invalid e-mail or password. Please check your credentials.",
-      "already_configured": "An account with this e-mail address is already configured."
-    },
     "step": {
       "init": {
         "data": {
@@ -59,7 +51,15 @@
           "force_battery": "Force creation of battery sensor for devices without battery defined in API"
         },
         "description": "Set credentials for PAJ GPS account (finder-portal.com).",
-        "title": "PAJ GPS Configuration"
+        "title": "PAJ GPS Configuration",
+        "error": {
+          "entry_name_required": "Please enter a name for the entry.",
+          "email_required": "Please enter your e-mail address.",
+          "password_required": "Please enter your password.",
+          "cannot_connect": "Unable to reach the PAJ GPS API. Please check your network connection.",
+          "invalid_auth": "Invalid e-mail or password. Please check your credentials.",
+          "already_configured": "An account with this e-mail address is already configured."
+        }
       }
     }
   }
