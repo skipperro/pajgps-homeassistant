@@ -198,9 +198,6 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 sensor = await fut
                 if sensor is None or sensor == []:
                     return
-                if sensor is not SensorData:
-                    _LOGGER.debug("Unexpected sensor data format for device %s: %s", device_id, sensor)
-                    return
                 new_sensors = dict(self.data.sensor_data)
                 new_sensors[device_id] = sensor
                 self.async_set_updated_data(
