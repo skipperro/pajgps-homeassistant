@@ -14,19 +14,18 @@ from .coordinator import PajGpsCoordinator
 _LOGGER = logging.getLogger(__name__)
 class PajGPSVoltageSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
     """Voltage sensor reading from coordinator sensor_data."""
+    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "V"
     _attr_suggested_display_precision = 1
     _attr_icon = "mdi:flash"
+    _attr_name = "Voltage"
 
     def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
         super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_voltage"
-        self._attr_name = f"{device_name} Voltage"
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -42,16 +41,15 @@ class PajGPSVoltageSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
 
 class PajGPSBatterySensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
     """Battery level sensor reading from coordinator positions."""
+    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "%"
+    _attr_name = "Battery Level"
     def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
         super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_battery"
-        self._attr_name = f"{device_name} Battery Level"
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -93,17 +91,16 @@ class PajGPSBatterySensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
 
 class PajGPSSpeedSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
     """Speed sensor reading from coordinator positions."""
+    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.SPEED
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "km/h"
     _attr_icon = "mdi:speedometer"
+    _attr_name = "Speed"
     def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
         super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_speed"
-        self._attr_name = f"{device_name} Speed"
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -118,18 +115,17 @@ class PajGPSSpeedSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
 
 class PajGPSElevationSensor(CoordinatorEntity[PajGpsCoordinator], SensorEntity):
     """Elevation sensor reading from coordinator elevations."""
+    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.DISTANCE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "m"
     _attr_icon = "mdi:map-marker-up"
     _attr_suggested_display_precision = 1
+    _attr_name = "Elevation"
     def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
         super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_elevation"
-        self._attr_name = f"{device_name} Elevation"
 
     @property
     def device_info(self) -> DeviceInfo | None:

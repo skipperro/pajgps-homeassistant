@@ -14,6 +14,7 @@ from .coordinator import PajGpsCoordinator
 _LOGGER = logging.getLogger(__name__)
 class PajGPSAlertSensor(CoordinatorEntity[PajGpsCoordinator], BinarySensorEntity):
     """Binary sensor that is ON when an unread notification of a given type exists."""
+    _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     def __init__(
         self, pajgps_coordinator: PajGpsCoordinator, device_id: int, alert_type: int
@@ -22,12 +23,10 @@ class PajGPSAlertSensor(CoordinatorEntity[PajGpsCoordinator], BinarySensorEntity
         self._device_id = device_id
         self._alert_type = alert_type
         alert_name = ALERT_NAMES.get(alert_type, "Unknown Alert")
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = (
             f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_alert_{alert_type}"
         )
-        self._attr_name = f"{device_name} {alert_name}"
+        self._attr_name = alert_name
     @property
     def device_info(self) -> DeviceInfo | None:
         return self.coordinator.get_device_info(self._device_id)

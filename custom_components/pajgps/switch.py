@@ -19,6 +19,7 @@ class PajGPSAlertSwitch(CoordinatorEntity[PajGpsCoordinator], SwitchEntity):
     then updates the snapshot optimistically.  Server confirmation arrives with
     the next device-tier refresh (~300 s).
     """
+    _attr_has_entity_name = True
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:bell-cog"
     def __init__(
@@ -28,12 +29,10 @@ class PajGPSAlertSwitch(CoordinatorEntity[PajGpsCoordinator], SwitchEntity):
         self._device_id = device_id
         self._alert_type = alert_type
         alert_name = ALERT_NAMES.get(alert_type, "Unknown Alert")
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = (
             f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_switch_{alert_type}"
         )
-        self._attr_name = f"{device_name} {alert_name} Switch"
+        self._attr_name = alert_name
     @property
     def device_info(self) -> DeviceInfo | None:
         return self.coordinator.get_device_info(self._device_id)

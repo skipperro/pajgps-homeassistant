@@ -19,14 +19,14 @@ _LOGGER = logging.getLogger(__name__)
 class PajGPSPositionSensor(CoordinatorEntity[PajGpsCoordinator], TrackerEntity):
     """Tracker entity that reads position from the coordinator snapshot."""
 
+    _attr_has_entity_name = True
+    _attr_name = None  # Primary feature of the device — entity name equals device name
+    _attr_icon = "mdi:map-marker"
+
     def __init__(self, pajgps_coordinator: PajGpsCoordinator, device_id: int) -> None:
         super().__init__(pajgps_coordinator)
         self._device_id = device_id
-        device = next((d for d in pajgps_coordinator.data.devices if d.id == device_id), None)
-        device_name = device.name if device and device.name else f"PAJ GPS {device_id}"
         self._attr_unique_id = f"pajgps_{pajgps_coordinator.entry_data['guid']}_{device_id}_gps"
-        self._attr_name = f"{device_name} Location"
-        self._attr_icon = "mdi:map-marker"
 
     @property
     def device_info(self) -> DeviceInfo | None:

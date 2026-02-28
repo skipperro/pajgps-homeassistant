@@ -15,6 +15,14 @@
           "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
           "force_battery": "Force creation of battery sensor for devices without battery defined in API"
         },
+        "data_description": {
+          "entry_name": "Entry name to identify the account in HA",
+          "email": "E-Mail used for login to finder portal (finder-portal.com)",
+          "password": "Password used for login to finder portal (finder-portal.com)",
+          "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
+          "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
+          "force_battery": "Force creation of battery sensor for devices without battery defined in API"
+        },
         "description": "Set credentials for PAJ GPS account (finder-portal.com).",
         "title": "PAJ GPS Configuration"
       }
@@ -32,6 +40,14 @@
           "entry_name": "Entry name to identify the account in HA",
           "email": "E-Mail",
           "password": "Password",
+          "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
+          "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
+          "force_battery": "Force creation of battery sensor for devices without battery defined in API"
+        },
+        "data_description": {
+          "entry_name": "Entry name to identify the account in HA",
+          "email": "E-Mail used for login to finder portal (finder-portal.com)",
+          "password": "Password used for login to finder portal (finder-portal.com)",
           "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
           "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
           "force_battery": "Force creation of battery sensor for devices without battery defined in API"
