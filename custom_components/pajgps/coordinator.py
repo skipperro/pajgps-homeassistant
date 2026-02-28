@@ -7,7 +7,7 @@ Responsibilities:
     Tier 1 — device list       every DEVICES_INTERVAL seconds
     Tier 2 — positions+sensors every POSITIONS_INTERVAL seconds
     Tier 3 — notifications     every NOTIFICATIONS_INTERVAL seconds
-- Delegate per-device call serialisation to DeviceRequestQueue (device_queue.py).
+- Delegate per-device call serialization to DeviceRequestQueue (device_queue.py).
 - Delegate elevation fetching and device-copy helpers to coordinator_utils.py.
 - Push CoordinatorData snapshots to entities as soon as each response arrives.
 """
@@ -63,7 +63,7 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
     """
 
     def __init__(self, hass: HomeAssistant, entry_data: dict) -> None:
-        """Initialise the coordinator from config-entry data."""
+        """Initialize the coordinator from config-entry data."""
         from datetime import timedelta
         super().__init__(
             hass,
@@ -81,7 +81,7 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._entry_data = entry_data
         self._queue = DeviceRequestQueue()
 
-        # Tier timestamps — initialised to 0 so every tier fires on first call
+        # Tier timestamps — initialized to 0 so every tier fires on first call
         self._last_devices_fetch: float = 0.0
         self._last_positions_fetch: float = 0.0
         self._last_notifications_fetch: float = 0.0

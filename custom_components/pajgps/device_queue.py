@@ -107,5 +107,5 @@ class DeviceRequestQueue:
             finally:
                 self._running[device_id] = None
                 self._queues[device_id].task_done()
-                # Honour the minimum inter-request delay before taking the next job
+                # Honor the minimum inter-request delay before taking the next job
                 await asyncio.sleep(REQUEST_DELAY)

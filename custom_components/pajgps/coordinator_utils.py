@@ -28,6 +28,7 @@ async def fetch_elevation(lat: float, lng: float) -> float | None:
     Rounds lat/lng to ~100 m precision to improve remote cache hit rate.
     Returns None on any error so callers can handle the absence gracefully.
     """
+    # ToDo: Fetching elevation have to be modified to either use data from PAJ GPS API when they start providing it or use open-meteo library when they merge pull request https://github.com/frenck/python-open-meteo/pull/1305
     rounded_lat = round(lat, 5)
     rounded_lng = round(lng, 5)
     params = {"latitude": rounded_lat, "longitude": rounded_lng}
