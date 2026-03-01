@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "entry_name": "Eintragsname",
+          "email": "E-Mail",
+          "password": "Passwort",
+          "mark_alerts_as_read": "NAchrichten als gelesen markieren",
+          "fetch_elevation": "Höhensensor",
+          "force_battery": "Batteriesensor erzwingen"
+        },
+        "data_description": {
+          "entry_name": "Eintragsname zur Identifikation des Kontos in Home Assistant",
+          "email": "E-Mail-Adresse für den Login im Finder-Portal (finder-portal.com)",
+          "password": "Passwort für den Login im Finder-Portal (finder-portal.com)",
+          "mark_alerts_as_read": "Benachrichtigungen im Finder-Portal nach dem Abrufen als gelesen markieren",
+          "fetch_elevation": "Höhendaten basierend auf der Position über die Open Meteo API abrufen",
+          "force_battery": "Batteriesensor für Geräte ohne Batteriedefinition in der API erzwingen"
+        },
+        "description": "Zugangsdaten für das PAJ GPS-Konto (finder-portal.com) eingeben.",
+        "title": "PAJ GPS Konfiguration"
+      }
+    },
+    "error": {
+      "entry_name_required": "Bitte geben Sie einen Namen für den Eintrag ein.",
+      "email_required": "Bitte geben Sie Ihre E-Mail-Adresse ein.",
+      "password_required": "Bitte geben Sie Ihr Passwort ein.",
+      "cannot_connect": "Die PAJ GPS API ist nicht erreichbar. Bitte überprüfen Sie Ihre Netzwerkverbindung.",
+      "invalid_auth": "Ungültige E-Mail-Adresse oder Passwort. Bitte überprüfen Sie Ihre Zugangsdaten.",
+      "already_configured": "Ein Konto mit dieser E-Mail-Adresse ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "entry_name": "Eintragsname",
+          "email": "E-Mail",
+          "password": "Passwort",
+          "mark_alerts_as_read": "Als gelesen markieren",
+          "fetch_elevation": "Höhensensor",
+          "force_battery": "Batteriesensor erzwingen"
+        },
+        "data_description": {
+          "entry_name": "Eintragsname zur Identifikation des Kontos in Home Assistant",
+          "email": "E-Mail-Adresse für den Login im Finder-Portal (finder-portal.com)",
+          "password": "Passwort für den Login im Finder-Portal (finder-portal.com)",
+          "mark_alerts_as_read": "Benachrichtigungen im Finder-Portal nach dem Abrufen als gelesen markieren",
+          "fetch_elevation": "Höhendaten basierend auf der Position über die Open Meteo API abrufen",
+          "force_battery": "Batteriesensor für Geräte ohne Batteriedefinition in der API erzwingen"
+        },
+        "description": "Zugangsdaten für das PAJ GPS-Konto (finder-portal.com) eingeben.",
+        "title": "PAJ GPS Konfiguration"
+      }
+    },
+    "error": {
+      "entry_name_required": "Bitte geben Sie einen Namen für den Eintrag ein.",
+      "email_required": "Bitte geben Sie Ihre E-Mail-Adresse ein.",
+      "password_required": "Bitte geben Sie Ihr Passwort ein.",
+      "cannot_connect": "Die PAJ GPS API ist nicht erreichbar. Bitte überprüfen Sie Ihre Netzwerkverbindung.",
+      "invalid_auth": "Ungültige E-Mail-Adresse oder Passwort. Bitte überprüfen Sie Ihre Zugangsdaten.",
+      "already_configured": "Ein Konto mit dieser E-Mail-Adresse ist bereits konfiguriert."
+    }
+  }
+}

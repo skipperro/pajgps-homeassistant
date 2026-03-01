@@ -16,9 +16,9 @@
 > https://pypi.org/project/pajgps-api/
 - [x] `docs-actions` - The documentation describes the provided service actions that can be used
 > There are no service actions
-- [ ] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
-- [ ] `docs-installation-instructions` - The documentation provides step-by-step installation instructions for the integration, including, if needed, prerequisites
-- [ ] `docs-removal-instructions` - The documentation provides removal instructions
+- [x] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
+- [x] `docs-installation-instructions` - The documentation provides step-by-step installation instructions for the integration, including, if needed, prerequisites
+- [x] `docs-removal-instructions` - The documentation provides removal instructions
 - [x] `entity-event-setup` - Entity events are subscribed in the correct lifecycle methods
 > As far as I can tell, there are no entity events in this integration
 - [x] `entity-unique-id` - Entities have a unique ID
@@ -27,14 +27,14 @@
 - [x] `test-before-configure` - Test a connection in the config flow
 - [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
 - [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
-> Email is used as unique identifier, so only one account can be set up, but it can have multiple devices
+> Email is used as unique identifier, so only one account can be set up, but it can have multiple devices. Trying to use same email again will fail in config_flow.
 
 ## Silver
 - [x] `action-exceptions` - Service actions raise exceptions when encountering failures
 > There are no service actions
 - [x] `config-entry-unloading` - Support config entry unloading
-- [ ] `docs-configuration-parameters` - The documentation describes all integration configuration options
-- [ ] `docs-installation-parameters` - The documentation describes all integration installation parameters
+- [x] `docs-configuration-parameters` - The documentation describes all integration configuration options
+- [x] `docs-installation-parameters` - The documentation describes all integration installation parameters
 - [x] `entity-unavailable` - Mark entity unavailable if appropriate
 - [x] `integration-owner` - Has an integration owner
 - [x] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected
@@ -49,23 +49,27 @@
 - [x] `discovery-update-info` - Integration uses discovery info to update network information
 > No device discovery - API just returns them all.
 - [x] `discovery` - Devices can be discovered
-- [ ] `docs-data-update` - The documentation describes how data is updated
-- [ ] `docs-examples` - The documentation provides automation examples the user can use.
-- [ ] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
-- [ ] `docs-supported-devices` - The documentation describes known supported / unsupported devices
-- [ ] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
-- [ ] `docs-troubleshooting` - The documentation provides troubleshooting information
-- [ ] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
-- [ ] `dynamic-devices` - Devices added after integration setup
-- [ ] `entity-category` - Entities are assigned an appropriate EntityCategory
-- [ ] `entity-device-class` - Entities use device classes where possible
-- [ ] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities
-- [ ] `entity-translations` - Entities have translated names
-- [ ] `exception-translations` - Exception messages are translatable
-- [ ] `icon-translations` - Entities implement icon translations
+- [x] `docs-data-update` - The documentation describes how data is updated
+- [x] `docs-examples` - The documentation provides automation examples the user can use.
+- [x] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
+- [x] `docs-supported-devices` - The documentation describes known supported / unsupported devices
+- [x] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
+- [x] `docs-troubleshooting` - The documentation provides troubleshooting information
+- [x] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
+- [x] `dynamic-devices` - Devices added after integration setup
+- [x] `entity-category` - Entities are assigned an appropriate EntityCategory
+- [x] `entity-device-class` - Entities use device classes where possible
+- [x] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities
+> There are no entities that I would consider less popular or noisy, so all entities are enabled by default.
+- [x] `entity-translations` - Entities have translated names
+> They all use standard names like Location, Battery, Speed, etc. that are automatically translated by Home Assistant.
+- [x] `exception-translations` - Exception messages are translatable
+- [x] `icon-translations` - Entities implement icon translations
+> They all use standard icons that are automatically translated by Home Assistant.
 - [x] `reconfiguration-flow` - Integrations should have a reconfigure flow
-- [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
-- [ ] `stale-devices` - Stale devices are removed
+- [x] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
+- [x] `stale-devices` - Stale devices are removed
+> If the device is removed from finder portal it should disappear from the list in HA. Testing to confirm required.
 
 ## Platinum
 - [x] `async-dependency` - Dependency is async

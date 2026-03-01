@@ -17,6 +17,7 @@ import asyncio
 import dataclasses
 import logging
 import time
+import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -61,7 +62,12 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
     snapshots to entities as soon as each response arrives.
     """
 
-    def __init__(self, hass: HomeAssistant, entry_data: dict) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry_data: dict,
+        websession: aiohttp.ClientSession | None = None,
+    ) -> None:
         """Initialize the coordinator from config-entry data."""
         from datetime import timedelta
         super().__init__(
@@ -76,6 +82,7 @@ class PajGpsCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self.api = PajGpsApi(
             email=entry_data["email"],
             password=entry_data["password"],
+            websession=websession,
         )
         self._entry_data = entry_data
         self._queue = DeviceRequestQueue()

@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "data": {
-          "entry_name": "Entry name to identify the account in Home Assistant",
+          "entry_name": "Entity name",
           "email": "E-Mail",
           "password": "Password",
-          "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
-          "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
-          "force_battery": "Force creation of battery sensor for devices without battery defined in API"
+          "mark_alerts_as_read": "Consume notifications",
+          "fetch_elevation": "Elevation sensor",
+          "force_battery": "Force battery sensor"
         },
         "data_description": {
           "entry_name": "Entry name to identify the account in Home Assistant",
@@ -34,13 +34,13 @@
   "options": {
     "step": {
       "init": {
-        "data": {
-          "entry_name": "Entry name to identify the account in Home Assistant",
+         "data": {
+          "entry_name": "Entity name",
           "email": "E-Mail",
           "password": "Password",
-          "mark_alerts_as_read": "Mark alerts as read on finder portal after fetching them into HA",
-          "fetch_elevation": "Fetch elevation data based on position using Open Meteo API",
-          "force_battery": "Force creation of battery sensor for devices without battery defined in API"
+          "mark_alerts_as_read": "Consume notifications",
+          "fetch_elevation": "Elevation sensor",
+          "force_battery": "Force battery sensor"
         },
         "data_description": {
           "entry_name": "Entry name to identify the account in Home Assistant",

@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "entry_name": "Nazwa wpisu",
+          "email": "E-Mail",
+          "password": "Hasło",
+          "mark_alerts_as_read": "Konsumuj powiadomienia",
+          "fetch_elevation": "Czujnik wysokości",
+          "force_battery": "Wymuś czujnik baterii"
+        },
+        "data_description": {
+          "entry_name": "Nazwa wpisu identyfikującego konto w Home Assistant",
+          "email": "E-Mail używany do logowania w portalu Finder (finder-portal.com)",
+          "password": "Hasło używane do logowania w portalu Finder (finder-portal.com)",
+          "mark_alerts_as_read": "Oznacz alerty jako przeczytane w portalu Finder po ich pobraniu do HA",
+          "fetch_elevation": "Pobieraj dane o wysokości na podstawie pozycji przy użyciu API Open Meteo",
+          "force_battery": "Wymuś tworzenie czujnika baterii dla urządzeń bez zdefiniowanej baterii w API"
+        },
+        "description": "Wprowadź dane logowania do konta PAJ GPS (finder-portal.com).",
+        "title": "Konfiguracja PAJ GPS"
+      }
+    },
+    "error": {
+      "entry_name_required": "Proszę podać nazwę wpisu.",
+      "email_required": "Proszę podać adres e-mail.",
+      "password_required": "Proszę podać hasło.",
+      "cannot_connect": "Nie można połączyć się z API PAJ GPS. Sprawdź połączenie sieciowe.",
+      "invalid_auth": "Nieprawidłowy adres e-mail lub hasło. Sprawdź swoje dane logowania.",
+      "already_configured": "Konto z tym adresem e-mail jest już skonfigurowane."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "entry_name": "Nazwa wpisu",
+          "email": "E-Mail",
+          "password": "Hasło",
+          "mark_alerts_as_read": "Odbieraj powiadomienia",
+          "fetch_elevation": "Czujnik wysokości",
+          "force_battery": "Wymuś czujnik baterii"
+        },
+        "data_description": {
+          "entry_name": "Nazwa wpisu identyfikującego konto w Home Assistant",
+          "email": "E-Mail używany do logowania w portalu Finder (finder-portal.com)",
+          "password": "Hasło używane do logowania w portalu Finder (finder-portal.com)",
+          "mark_alerts_as_read": "Oznacz alerty jako przeczytane w portalu Finder po ich pobraniu do HA",
+          "fetch_elevation": "Pobieraj dane o wysokości na podstawie pozycji przy użyciu API Open Meteo",
+          "force_battery": "Wymuś tworzenie czujnika baterii dla urządzeń bez zdefiniowanej baterii w API"
+        },
+        "description": "Wprowadź dane logowania do konta PAJ GPS (finder-portal.com).",
+        "title": "Konfiguracja PAJ GPS"
+      }
+    },
+    "error": {
+      "entry_name_required": "Proszę podać nazwę wpisu.",
+      "email_required": "Proszę podać adres e-mail.",
+      "password_required": "Proszę podać hasło.",
+      "cannot_connect": "Nie można połączyć się z API PAJ GPS. Sprawdź połączenie sieciowe.",
+      "invalid_auth": "Nieprawidłowy adres e-mail lub hasło. Sprawdź swoje dane logowania.",
+      "already_configured": "Konto z tym adresem e-mail jest już skonfigurowane."
+    }
+  }
+}

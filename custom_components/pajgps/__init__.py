@@ -5,6 +5,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .coordinator import PajGpsCoordinator
 from .const import DOMAIN
@@ -31,7 +32,7 @@ async def async_setup_entry(
     if error_key == "invalid_auth":
         raise ConfigEntryNotReady("Invalid PAJ GPS credentials.")
 
-    pajgps_coordinator = PajGpsCoordinator(hass, dict(entry.data))
+    pajgps_coordinator = PajGpsCoordinator(hass, dict(entry.data), async_get_clientsession(hass))
     try:
         await pajgps_coordinator.async_config_entry_first_refresh()
     except ConfigEntryNotReady:
