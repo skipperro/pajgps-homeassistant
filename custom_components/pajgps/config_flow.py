@@ -14,21 +14,28 @@ from pajgps_api.pajgps_api_error import AuthenticationError, TokenRefreshError
 
 from .const import DOMAIN
 
-big_int = vol.All(vol.Coerce(int), vol.Range(min=300))
-# Email validator that checks if the string is not empty and contains '@'
-email_validator = vol.All(cv.string, vol.Length(min=1), vol.Match(r"^[^@]+@[^@]+\.[^@]+$"))
-
 _LOGGER = logging.getLogger(__name__)
-CONFIG_SCHEMA = vol.Schema(
-            {
-                vol.Required('entry_name', default='My Paj GPS Account'): cv.string,
-                vol.Required('email', default=''): cv.string,
-                vol.Required('password', default=''): cv.string,
-                vol.Required('mark_alerts_as_read', default=True): cv.boolean,
-                vol.Required('fetch_elevation', default=False): cv.boolean,
-                vol.Required('force_battery', default=False): cv.boolean,
-            }
-        )
+
+
+def _build_config_schema(
+    entry_name: str = 'My Paj GPS Account',
+    email: str = '',
+    password: str = '',
+    mark_alerts_as_read: bool = True,
+    fetch_elevation: bool = False,
+    force_battery: bool = False,
+) -> vol.Schema:
+    """Build config schema with optional pre-filled defaults."""
+    return vol.Schema(
+        {
+            vol.Required('entry_name', default=entry_name): cv.string,
+            vol.Required('email', default=email): cv.string,
+            vol.Required('password', default=password): cv.string,
+            vol.Required('mark_alerts_as_read', default=mark_alerts_as_read): cv.boolean,
+            vol.Required('fetch_elevation', default=fetch_elevation): cv.boolean,
+            vol.Required('force_battery', default=force_battery): cv.boolean,
+        }
+    )
 
 async def _validate_credentials(email: str, password: str) -> str | None:
     """
@@ -71,7 +78,20 @@ class CustomFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 return self.async_create_entry(title=f"{self.data['entry_name']}", data=self.data)
 
-        return self.async_show_form(step_id="user", data_schema=CONFIG_SCHEMA, errors=errors)
+            return self.async_show_form(
+                step_id="user",
+                data_schema=_build_config_schema(
+                    entry_name=user_input.get('entry_name', ''),
+                    email=user_input.get('email', ''),
+                    password=user_input.get('password', ''),
+                    mark_alerts_as_read=user_input.get('mark_alerts_as_read', True),
+                    fetch_elevation=user_input.get('fetch_elevation', False),
+                    force_battery=user_input.get('force_battery', False),
+                ),
+                errors=errors,
+            )
+
+        return self.async_show_form(step_id="user", data_schema=_build_config_schema(), errors=errors)
 
     @staticmethod
     @callback
@@ -153,16 +173,28 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
                 return self.async_create_entry(title=new_data['entry_name'], data=new_data)
 
+            return self.async_show_form(
+                step_id="init",
+                data_schema=_build_config_schema(
+                    entry_name=user_input.get('entry_name', default_entry_name),
+                    email=user_input.get('email', default_email),
+                    password=user_input.get('password', default_password),
+                    mark_alerts_as_read=user_input.get('mark_alerts_as_read', default_mark_alerts_as_read),
+                    fetch_elevation=user_input.get('fetch_elevation', default_fetch_elevation),
+                    force_battery=user_input.get('force_battery', default_force_battery),
+                ),
+                errors=errors,
+            )
 
-
-        OPTIONS_SCHEMA = vol.Schema(
-            {
-                vol.Required('entry_name', default=default_entry_name): cv.string,
-                vol.Required('email', default=default_email): cv.string,
-                vol.Required('password', default=default_password): cv.string,
-                vol.Required('mark_alerts_as_read', default=default_mark_alerts_as_read): cv.boolean,
-                vol.Required('fetch_elevation', default=default_fetch_elevation): cv.boolean,
-                vol.Required('force_battery', default=default_force_battery): cv.boolean,
-            }
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_build_config_schema(
+                entry_name=default_entry_name,
+                email=default_email,
+                password=default_password,
+                mark_alerts_as_read=default_mark_alerts_as_read,
+                fetch_elevation=default_fetch_elevation,
+                force_battery=default_force_battery,
+            ),
+            errors=errors,
         )
-        return self.async_show_form(step_id="init", data_schema=OPTIONS_SCHEMA, errors=errors)
