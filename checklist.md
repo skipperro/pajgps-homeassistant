@@ -73,5 +73,5 @@
 
 ## Platinum
 - [x] `async-dependency` - Dependency is async
-- [ ] `inject-websession` - The integration dependency supports passing in a websession
+- [x] `inject-websession` - The integration dependency supports passing in a websession
 - [ ] `strict-typing` - Strict typing
