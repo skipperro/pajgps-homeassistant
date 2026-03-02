@@ -500,3 +500,13 @@ class TestValidateCredentials(unittest.IsolatedAsyncioTestCase):
             result = await _validate_credentials("user@example.com", "secret")
 
         self.assertEqual(result, "cannot_connect")
+
+
+class TestAsyncGetOptionsFlow(unittest.TestCase):
+    """Tests for CustomFlow.async_get_options_flow (config_flow.py line 100)."""
+
+    def test_returns_options_flow_handler(self):
+        """async_get_options_flow must return an OptionsFlowHandler instance."""
+        config_entry = MagicMock()
+        result = CustomFlow.async_get_options_flow(config_entry)
+        self.assertIsInstance(result, OptionsFlowHandler)

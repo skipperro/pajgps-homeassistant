@@ -115,6 +115,71 @@ class TestPositionsTier(unittest.IsolatedAsyncioTestCase):
 
         coord.api.get_all_last_positions.assert_not_awaited()
 
+    async def test_sensor_none_response_is_silently_ignored(self):
+        """When sensor API returns None, no snapshot should be pushed (line 206)."""
+        coord = make_coordinator()
+        coord.data = CoordinatorData(devices=[make_device(1)])
+        coord.api.get_all_last_positions = AsyncMock(return_value=[make_trackpoint(1)])
+        coord.api.get_last_sensor_data = AsyncMock(return_value=None)
+
+        snapshots = []
+        coord.async_set_updated_data = lambda d: snapshots.append(d)
+
+        await coord._run_positions_tier()
+        await asyncio.sleep(0.3)
+
+        # No sensor_data snapshot should have device 1 in sensor_data
+        self.assertFalse(any(1 in s.sensor_data for s in snapshots))
+
+    async def test_sensor_empty_list_response_is_silently_ignored(self):
+        """When sensor API returns [], no snapshot should be pushed (line 206)."""
+        coord = make_coordinator()
+        coord.data = CoordinatorData(devices=[make_device(1)])
+        coord.api.get_all_last_positions = AsyncMock(return_value=[make_trackpoint(1)])
+        coord.api.get_last_sensor_data = AsyncMock(return_value=[])
+
+        snapshots = []
+        coord.async_set_updated_data = lambda d: snapshots.append(d)
+
+        await coord._run_positions_tier()
+        await asyncio.sleep(0.3)
+
+        self.assertFalse(any(1 in s.sensor_data for s in snapshots))
+
+    async def test_unexpected_response_format_exception_logs_debug(self):
+        """'Unexpected response format' exception logs at DEBUG, not WARNING (lines 212-219)."""
+        coord = make_coordinator()
+        coord.data = CoordinatorData(devices=[make_device(1)])
+        coord.api.get_all_last_positions = AsyncMock(return_value=[make_trackpoint(1)])
+        coord.api.get_last_sensor_data = AsyncMock(
+            side_effect=Exception("Unexpected response format: []")
+        )
+
+        import logging
+        with self.assertLogs("custom_components.pajgps.coordinator", level=logging.DEBUG) as cm:
+            await coord._run_positions_tier()
+            await asyncio.sleep(0.3)
+
+        debug_messages = [m for m in cm.output if "DEBUG" in m and "lack sensors" in m]
+        self.assertTrue(len(debug_messages) > 0)
+
+    async def test_generic_sensor_exception_logs_warning(self):
+        """A generic sensor exception must log at WARNING (lines 218-219)."""
+        coord = make_coordinator()
+        coord.data = CoordinatorData(devices=[make_device(1)])
+        coord.api.get_all_last_positions = AsyncMock(return_value=[make_trackpoint(1)])
+        coord.api.get_last_sensor_data = AsyncMock(
+            side_effect=Exception("Some other network error")
+        )
+
+        import logging
+        with self.assertLogs("custom_components.pajgps.coordinator", level=logging.WARNING) as cm:
+            await coord._run_positions_tier()
+            await asyncio.sleep(0.3)
+
+        warning_messages = [m for m in cm.output if "WARNING" in m and "Failed to fetch sensor" in m]
+        self.assertTrue(len(warning_messages) > 0)
+
 
 class TestNotificationsTier(unittest.IsolatedAsyncioTestCase):
 
@@ -180,6 +245,36 @@ class TestNotificationsTier(unittest.IsolatedAsyncioTestCase):
         await coord._run_notifications_tier()
 
         coord.api.get_device_notifications.assert_not_awaited()
+
+    async def test_none_notifications_response_is_silently_ignored(self):
+        """When notifications API returns None, no snapshot is pushed (line 308)."""
+        coord = make_coordinator()
+        coord.data = CoordinatorData(devices=[make_device(1)])
+        coord.api.get_device_notifications = AsyncMock(return_value=None)
+
+        snapshots = []
+        coord.async_set_updated_data = lambda d: snapshots.append(d)
+
+        await coord._run_notifications_tier()
+        await asyncio.sleep(0.3)
+
+        self.assertFalse(any(1 in s.notifications for s in snapshots))
+
+    async def test_notification_exception_logs_warning(self):
+        """An exception in _collect_notifications must log a WARNING (line 320)."""
+        coord = make_coordinator()
+        coord.data = CoordinatorData(devices=[make_device(1)])
+        coord.api.get_device_notifications = AsyncMock(
+            side_effect=Exception("network blip")
+        )
+
+        import logging
+        with self.assertLogs("custom_components.pajgps.coordinator", level=logging.WARNING) as cm:
+            await coord._run_notifications_tier()
+            await asyncio.sleep(0.3)
+
+        warning_messages = [m for m in cm.output if "WARNING" in m and "Failed to fetch notifications" in m]
+        self.assertTrue(len(warning_messages) > 0)
 
 
 class TestAlertToggle(unittest.IsolatedAsyncioTestCase):

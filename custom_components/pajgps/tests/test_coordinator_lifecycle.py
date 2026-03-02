@@ -92,6 +92,17 @@ class TestTierScheduling(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(UpdateFailed):
             await coord._async_update_data()
 
+    async def test_generic_login_exception_raises_update_failed(self):
+        """A non-auth exception during login must also raise UpdateFailed (line 125-126)."""
+        from homeassistant.helpers.update_coordinator import UpdateFailed
+        coord = make_coordinator()
+        coord.api.login = AsyncMock(side_effect=ConnectionError("network gone"))
+
+        with self.assertRaises(UpdateFailed) as ctx:
+            await coord._async_update_data()
+
+        self.assertIn("connection error", str(ctx.exception).lower())
+
 
 class TestInitialRefresh(unittest.IsolatedAsyncioTestCase):
 
