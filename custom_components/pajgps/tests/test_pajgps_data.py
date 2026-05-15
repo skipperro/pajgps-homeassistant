@@ -4,6 +4,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 import custom_components.pajgps.pajgps_data as pajgps_data
+from custom_components.pajgps import models
 from custom_components.pajgps.api.auth import get_login_token
 from custom_components.pajgps.api.positions import fetch_elevation
 from custom_components.pajgps.models import PajGPSAlert, PajGPSDevice, PajGPSPositionData
@@ -155,7 +156,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert pos.lat is not None
             assert pos.lng is not None
             assert pos.speed is not None
-            assert pos.battery is not None
+            assert pos.battery_level is not None
 
         # Mock the make_request to test the update_alerts_data method without data from api
         with patch('custom_components.pajgps.api.alerts.make_request', new=AsyncMock(return_value={"success": [
@@ -334,7 +335,7 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
         assert position.lat is not None
         assert position.lng is not None
         assert position.speed is not None
-        assert position.battery is not None
+        assert position.battery_level is not None
 
         # Test with non-existent device
         position = self.data.get_position(999999)
@@ -445,12 +446,12 @@ class PajGpsDataTest(unittest.IsolatedAsyncioTestCase):
             assert isinstance(position.lng, (int, float))
             assert isinstance(position.direction, int)
             assert isinstance(position.speed, int)
-            assert isinstance(position.battery, int)
+            assert isinstance(position.battery_level, int)
             assert -90 <= position.lat <= 90
             assert -180 <= position.lng <= 180
             assert 0 <= position.direction <= 360
             assert position.speed >= 0
-            assert 0 <= position.battery <= 100
+            assert 0 <= position.battery_level <= 100
 
     async def test_device_data_structure(self):
         """

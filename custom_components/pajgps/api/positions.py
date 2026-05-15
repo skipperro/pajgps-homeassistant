@@ -55,7 +55,7 @@ async def fetch_positions(device_ids: list[int], headers: dict) -> tuple[list[Pa
             device["lng"],
             device["direction"],
             device["speed"],
-            device["battery"],
+            device["battery_level"],
         )
         for device in raw_json["success"]
     ]

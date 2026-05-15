@@ -85,17 +85,17 @@ class PajGPSPositionData:
     elevation: float | None = None
     direction: int
     speed: int
-    battery: int
+    battery_level: int
     last_elevation_update: float = 0.0
 
-    def __init__(self, device_id: int, lat: float, lng: float, direction: int, speed: int, battery: int) -> None:
+    def __init__(self, device_id: int, lat: float, lng: float, direction: int, speed: int, battery_level: int) -> None:
         """Initialize the PajGPSPositionData class."""
         self.device_id = device_id
         self.lat = lat
         self.lng = lng
         self.direction = direction
         self.speed = speed
-        self.battery = battery
+        self.battery_level = battery_level
 
 
 class PajGPSSensorData:
