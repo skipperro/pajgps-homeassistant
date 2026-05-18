@@ -111,8 +111,8 @@ class PajGPSBatterySensor(SensorEntity):
             await self._pajgps_data.update_pajgps_data()
             position_data = self._pajgps_data.get_position(self._device_id)
             if position_data is not None:
-                if position_data.battery is not None:
-                    self._battery_level = position_data.battery
+                if position_data.battery_level is not None:
+                    self._battery_level = position_data.battery_level
                 else:
                     self._battery_level = None
         except Exception as e:
