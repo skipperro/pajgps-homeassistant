@@ -87,8 +87,18 @@ class PajGPSPositionData:
     speed: int
     battery_level: int
     last_elevation_update: float = 0.0
+    fix_time: int | None = None
 
-    def __init__(self, device_id: int, lat: float, lng: float, direction: int, speed: int, battery_level: int) -> None:
+    def __init__(
+        self,
+        device_id: int,
+        lat: float,
+        lng: float,
+        direction: int,
+        speed: int,
+        battery_level: int,
+        fix_time: int | None = None,
+    ) -> None:
         """Initialize the PajGPSPositionData class."""
         self.device_id = device_id
         self.lat = lat
@@ -96,6 +106,12 @@ class PajGPSPositionData:
         self.direction = direction
         self.speed = speed
         self.battery_level = battery_level
+        # Unix timestamp (seconds) of when the device actually reported this
+        # position -- the "dateunix" field on each element of
+        # getalllastpositions' success[]. Optional because it's new; older
+        # callers/tests that don't pass it still get a working object, they
+        # just don't get staleness info.
+        self.fix_time = fix_time
 
 
 class PajGPSSensorData:

@@ -36,7 +36,13 @@ async def check_pajgps_availability(timeout: int = 15) -> bool:
         session = aiohttp.ClientSession(timeout=timeout_config)
 
         try:
-            async with session.head(API_BASE_URL) as response:
+            # allow_redirects=True: the root domain 302s to /login by design
+            # (this is normal PAJ behaviour, not an outage). aiohttp's HEAD
+            # requests don't follow redirects by default (unlike GET), so
+            # without this the check always saw the bare 302 and reported
+            # "not reachable" even when the API was fine -- which then
+            # skipped every real data update behind it.
+            async with session.head(API_BASE_URL, allow_redirects=True) as response:
                 if response.status != 200:
                     _LOGGER.warning("API URL is not reachable (status %s)", response.status)
                     return False

@@ -5,7 +5,7 @@ and updating their state based on the data received from the Paj GPS API.
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.core import HomeAssistant
@@ -28,6 +28,7 @@ class PajGPSPositionSensor(TrackerEntity):
     _device_id = None
     _longitude: float | None = None
     _latitude: float | None = None
+    _fix_time: int | None = None
 
     def __init__(self, pajgps_data: PajGPSData, device_id: int) -> None:
         """Initialize the sensor."""
@@ -71,11 +72,25 @@ class PajGPSPositionSensor(TrackerEntity):
         """Return the source type, eg gps or router, of the device."""
         return "gps"
 
+    @property
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        """Return the device's own fix time, so a consumer can tell a fresh
+        position from a stale one replaying the last known coordinates --
+        neither is otherwise distinguishable anywhere in Home Assistant."""
+        if self._fix_time is None:
+            return None
+        return {
+            "fix_time": datetime.fromtimestamp(
+                self._fix_time, tz=timezone.utc
+            ).isoformat()
+        }
+
     async def async_update(self) -> None:
         """Update the GPS sensor data."""
         await self._pajgps_data.update_pajgps_data()
         position_data = self._pajgps_data.get_position(self._device_id)
         if position_data is not None:
+            self._fix_time = position_data.fix_time
             if position_data.lat is not None and position_data.lng is not None:
                 self._latitude = position_data.lat
                 self._longitude = position_data.lng
@@ -83,6 +98,7 @@ class PajGPSPositionSensor(TrackerEntity):
                 self._latitude = None
                 self._longitude = None
         else:
+            self._fix_time = None
             self._latitude = None
             self._longitude = None
 
